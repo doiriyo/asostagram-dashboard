@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Legend,
+  Tooltip, ResponsiveContainer, Legend, ReferenceLine,
 } from 'recharts'
 
 // ── API設定 ──
@@ -26,15 +26,39 @@ const C = {
 
 // ── ユーティリティ ──
 
-/** 日付文字列やタイムスタンプを MM/DD 形式に変換 */
-const formatDate = (raw) => {
+/** 日付文字列やタイムスタンプを Date に変換 */
+const parseDate = (raw) => {
   const d = new Date(raw)
-  if (!isNaN(d.getTime())) {
-    return `${d.getMonth() + 1}/${d.getDate()}`
-  }
-  // フォールバック: "2024/06/15" 等のスラッシュ区切り
+  if (!isNaN(d.getTime())) return d
+  return null
+}
+
+/** X軸用: MM/DD 形式 */
+const formatDate = (raw) => {
+  const d = parseDate(raw)
+  if (d) return `${d.getMonth() + 1}/${d.getDate()}`
   const m = String(raw).match(/(\d{1,2})[\/\-](\d{1,2})$/)
   return m ? `${parseInt(m[1])}/${parseInt(m[2])}` : String(raw)
+}
+
+/** ツールチップ用: YY/MM/DD 形式 */
+const formatDateLong = (raw) => {
+  const d = parseDate(raw)
+  if (d) return `${String(d.getFullYear()).slice(-2)}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`
+  const m = String(raw).match(/(\d{2,4})[\/\-](\d{1,2})[\/\-](\d{1,2})/)
+  if (m) return `${m[1].slice(-2)}/${m[2].padStart(2, '0')}/${m[3].padStart(2, '0')}`
+  return String(raw)
+}
+
+/** データ配列から1月1日のエントリを抽出し、年ラベル付きで返す */
+const getNewYearLines = (chartData) => {
+  return chartData.filter(d => {
+    const p = parseDate(d.rawDate)
+    return p && p.getMonth() === 0 && p.getDate() === 1
+  }).map(d => {
+    const p = parseDate(d.rawDate)
+    return { date: d.date, year: p.getFullYear() }
+  })
 }
 
 // ── 共通コンポーネント ──
@@ -60,10 +84,11 @@ const SectionTitle = ({ children }) => (
 )
 
 const ChartTooltip = ({ active, payload, label }) => {
-  if (!active || !payload) return null
+  if (!active || !payload || payload.length === 0) return null
+  const displayDate = payload[0]?.payload?.tooltipDate || label
   return (
     <div style={{ background: '#fff', border: `1px solid ${C.cardBorder}`, borderRadius: 8, padding: '8px 12px', fontSize: 11, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
-      <div style={{ fontWeight: 700, marginBottom: 4 }}>{label}</div>
+      <div style={{ fontWeight: 700, marginBottom: 4 }}>{displayDate}</div>
       {payload.map((p, i) => (
         <div key={i} style={{ color: p.color }}>{p.name}: {Number(p.value).toLocaleString()}</div>
       ))}
@@ -149,6 +174,8 @@ function AccountTab({ data }) {
   // フォロワー推移チャート用データ
   const followerChart = filtered.map(d => ({
     date: formatDate(d['日付']),
+    rawDate: d['日付'],
+    tooltipDate: formatDateLong(d['日付']),
     followers: d['フォロワー数'],
     delta: d['フォロワー増減'],
   }))
@@ -156,9 +183,14 @@ function AccountTab({ data }) {
   // 日次指標チャート
   const dailyChart = filtered.map(d => ({
     date: formatDate(d['日付']),
+    rawDate: d['日付'],
+    tooltipDate: formatDateLong(d['日付']),
     views: d['閲覧数'] || 0,
     interactions: d['インタラクション数'] || 0,
   }))
+
+  const followerNewYears = getNewYearLines(followerChart)
+  const dailyNewYears = getNewYearLines(dailyChart)
 
   return (
     <div>
@@ -192,6 +224,10 @@ function AccountTab({ data }) {
               domain={['dataMin - 100', 'dataMax + 100']}
               tickFormatter={v => `${(v / 1000).toFixed(1)}K`} />
             <Tooltip content={<ChartTooltip />} />
+            {followerNewYears.map(ny => (
+              <ReferenceLine key={ny.year} x={ny.date} stroke={C.textMuted} strokeWidth={1.5}
+                label={{ value: ny.year, position: 'top', fontSize: 10, fontWeight: 700, fill: C.textSub }} />
+            ))}
             <Line type="monotone" dataKey="followers" name="フォロワー数" stroke={C.accent} strokeWidth={2.5} dot={false} />
           </LineChart>
         </ResponsiveContainer>
@@ -205,6 +241,10 @@ function AccountTab({ data }) {
             <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.textMuted }} tickLine={false} />
             <YAxis tick={{ fontSize: 10, fill: C.textMuted }} tickLine={false} axisLine={false} />
             <Tooltip content={<ChartTooltip />} />
+            {followerNewYears.map(ny => (
+              <ReferenceLine key={ny.year} x={ny.date} stroke={C.textMuted} strokeWidth={1.5}
+                label={{ value: ny.year, position: 'top', fontSize: 10, fontWeight: 700, fill: C.textSub }} />
+            ))}
             <Bar dataKey="delta" name="増減" radius={[3, 3, 0, 0]}>
               {followerChart.map((d, i) => (
                 <rect key={i} fill={d.delta >= 0 ? C.accentLight : C.red} />
@@ -223,6 +263,10 @@ function AccountTab({ data }) {
             <YAxis tick={{ fontSize: 10, fill: C.textMuted }} tickLine={false} axisLine={false} />
             <Tooltip content={<ChartTooltip />} />
             <Legend wrapperStyle={{ fontSize: 11 }} />
+            {dailyNewYears.map(ny => (
+              <ReferenceLine key={ny.year} x={ny.date} stroke={C.textMuted} strokeWidth={1.5}
+                label={{ value: ny.year, position: 'top', fontSize: 10, fontWeight: 700, fill: C.textSub }} />
+            ))}
             <Line type="monotone" dataKey="views" name="閲覧数" stroke={C.blue} strokeWidth={2} dot={false} />
             <Line type="monotone" dataKey="interactions" name="インタラクション" stroke={C.accent} strokeWidth={2} dot={false} />
           </LineChart>
