@@ -50,17 +50,51 @@ const formatDateLong = (raw) => {
   return String(raw)
 }
 
-/** データ配列から年が変わった最初のデータポイントのインデックスと年を返す */
-const getYearBoundaries = (chartData) => {
+/** データ配列から年度(4月始まり)・四半期境界を抽出する */
+const getFiscalBoundaries = (chartData) => {
   const results = []
   for (let i = 1; i < chartData.length; i++) {
     const prev = parseDate(chartData[i - 1].rawDate)
     const curr = parseDate(chartData[i].rawDate)
-    if (prev && curr && prev.getFullYear() !== curr.getFullYear()) {
-      results.push({ idx: i, year: curr.getFullYear() })
+    if (!prev || !curr) continue
+    if (prev.getMonth() === curr.getMonth()) continue
+    const cm = curr.getMonth() + 1
+    if (cm === 4 || cm === 7 || cm === 10 || cm === 1) {
+      results.push({
+        idx: i,
+        type: cm === 4 ? 'year' : 'quarter',
+        dateLabel: `${cm}/1`,
+      })
     }
   }
   return results
+}
+
+/** 年度ラベルの表示位置（各年度区間の中央インデックス）を算出する */
+const getFiscalYearLabels = (chartData, boundaries) => {
+  const yearStarts = boundaries.filter(b => b.type === 'year').map(b => b.idx)
+  const points = [0, ...yearStarts, chartData.length]
+  const labels = []
+  for (let i = 0; i < points.length - 1; i++) {
+    const midIdx = Math.floor((points[i] + points[i + 1]) / 2)
+    const d = parseDate(chartData[midIdx]?.rawDate)
+    if (d) {
+      const fy = d.getMonth() + 1 >= 4 ? d.getFullYear() : d.getFullYear() - 1
+      labels.push({ idx: midIdx, label: `${fy}年度` })
+    }
+  }
+  return labels
+}
+
+/** 境界線の下部に日付ラベルを表示するカスタムコンポーネント */
+const BoundaryDateLabel = ({ viewBox, value }) => {
+  if (!viewBox) return null
+  return (
+    <text x={viewBox.x} y={viewBox.y + viewBox.height + 14} textAnchor="middle"
+      fontSize={9} fontWeight={600} fill={C.textMuted}>
+      {value}
+    </text>
+  )
 }
 
 // ── 共通コンポーネント ──
@@ -193,8 +227,10 @@ function AccountTab({ data }) {
     interactions: d['インタラクション数'] || 0,
   }))
 
-  const followerNewYears = getYearBoundaries(followerChart)
-  const dailyNewYears = getYearBoundaries(dailyChart)
+  const followerBoundaries = getFiscalBoundaries(followerChart)
+  const followerFYLabels = getFiscalYearLabels(followerChart, followerBoundaries)
+  const dailyBoundaries = getFiscalBoundaries(dailyChart)
+  const dailyFYLabels = getFiscalYearLabels(dailyChart, dailyBoundaries)
 
   return (
     <div>
@@ -230,9 +266,15 @@ function AccountTab({ data }) {
               domain={['dataMin - 100', 'dataMax + 100']}
               tickFormatter={v => `${(v / 1000).toFixed(1)}K`} />
             <Tooltip content={<ChartTooltip />} />
-            {followerNewYears.map(ny => (
-              <ReferenceLine key={ny.year} x={ny.idx} stroke={C.textMuted} strokeWidth={1.5} strokeDasharray=""
-                label={{ value: ny.year, position: 'top', fontSize: 10, fontWeight: 700, fill: C.textSub }} />
+            {followerFYLabels.map(fl => (
+              <ReferenceLine key={fl.label} x={fl.idx} stroke="none"
+                label={{ value: fl.label, position: 'top', fontSize: 10, fontWeight: 700, fill: C.textSub }} />
+            ))}
+            {followerBoundaries.map((b, i) => (
+              <ReferenceLine key={`fb-${i}`} x={b.idx}
+                stroke={C.textMuted} strokeWidth={b.type === 'year' ? 1.5 : 1}
+                strokeDasharray={b.type === 'year' ? '' : '4 3'}
+                label={<BoundaryDateLabel value={b.dateLabel} />} />
             ))}
             <Line type="monotone" dataKey="followers" name="フォロワー数" stroke={C.accent} strokeWidth={2.5} dot={false} />
           </LineChart>
@@ -249,9 +291,15 @@ function AccountTab({ data }) {
               tick={{ fontSize: 10, fill: C.textMuted }} tickLine={false} />
             <YAxis tick={{ fontSize: 10, fill: C.textMuted }} tickLine={false} axisLine={false} />
             <Tooltip content={<ChartTooltip />} />
-            {followerNewYears.map(ny => (
-              <ReferenceLine key={ny.year} x={ny.idx} stroke={C.textMuted} strokeWidth={1.5} strokeDasharray=""
-                label={{ value: ny.year, position: 'top', fontSize: 10, fontWeight: 700, fill: C.textSub }} />
+            {followerFYLabels.map(fl => (
+              <ReferenceLine key={fl.label} x={fl.idx} stroke="none"
+                label={{ value: fl.label, position: 'top', fontSize: 10, fontWeight: 700, fill: C.textSub }} />
+            ))}
+            {followerBoundaries.map((b, i) => (
+              <ReferenceLine key={`fb2-${i}`} x={b.idx}
+                stroke={C.textMuted} strokeWidth={b.type === 'year' ? 1.5 : 1}
+                strokeDasharray={b.type === 'year' ? '' : '4 3'}
+                label={<BoundaryDateLabel value={b.dateLabel} />} />
             ))}
             <Bar dataKey="delta" name="増減" radius={[3, 3, 0, 0]}>
               {followerChart.map((d, i) => (
@@ -273,9 +321,15 @@ function AccountTab({ data }) {
             <YAxis tick={{ fontSize: 10, fill: C.textMuted }} tickLine={false} axisLine={false} />
             <Tooltip content={<ChartTooltip />} />
             <Legend wrapperStyle={{ fontSize: 11 }} />
-            {dailyNewYears.map(ny => (
-              <ReferenceLine key={ny.year} x={ny.idx} stroke={C.textMuted} strokeWidth={1.5} strokeDasharray=""
-                label={{ value: ny.year, position: 'top', fontSize: 10, fontWeight: 700, fill: C.textSub }} />
+            {dailyFYLabels.map(fl => (
+              <ReferenceLine key={fl.label} x={fl.idx} stroke="none"
+                label={{ value: fl.label, position: 'top', fontSize: 10, fontWeight: 700, fill: C.textSub }} />
+            ))}
+            {dailyBoundaries.map((b, i) => (
+              <ReferenceLine key={`db-${i}`} x={b.idx}
+                stroke={C.textMuted} strokeWidth={b.type === 'year' ? 1.5 : 1}
+                strokeDasharray={b.type === 'year' ? '' : '4 3'}
+                label={<BoundaryDateLabel value={b.dateLabel} />} />
             ))}
             <Line type="monotone" dataKey="views" name="閲覧数" stroke={C.blue} strokeWidth={2} dot={false} />
             <Line type="monotone" dataKey="interactions" name="インタラクション" stroke={C.accent} strokeWidth={2} dot={false} />
