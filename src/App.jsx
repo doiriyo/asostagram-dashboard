@@ -24,6 +24,19 @@ const C = {
   blue: '#3b82f6',
 }
 
+// ── ユーティリティ ──
+
+/** 日付文字列やタイムスタンプを MM/DD 形式に変換 */
+const formatDate = (raw) => {
+  const d = new Date(raw)
+  if (!isNaN(d.getTime())) {
+    return `${d.getMonth() + 1}/${d.getDate()}`
+  }
+  // フォールバック: "2024/06/15" 等のスラッシュ区切り
+  const m = String(raw).match(/(\d{1,2})[\/\-](\d{1,2})$/)
+  return m ? `${parseInt(m[1])}/${parseInt(m[2])}` : String(raw)
+}
+
 // ── 共通コンポーネント ──
 
 const KpiCard = ({ label, value, sub, accent }) => (
@@ -112,35 +125,58 @@ const ErrorMsg = ({ message, onRetry }) => (
 
 // ── アカウント概要タブ ──
 
+const PERIOD_OPTIONS = [
+  { key: 7, label: '7日' },
+  { key: 14, label: '14日' },
+  { key: 30, label: '30日' },
+  { key: 0, label: '全期間' },
+]
+
 function AccountTab({ data }) {
+  const [period, setPeriod] = useState(0)
+
   if (!data || data.length === 0) return <ErrorMsg message="アカウントデータがまだありません" />
 
-  const latest = data[data.length - 1]
-  const first = data[0]
+  const filtered = period > 0 ? data.slice(-period) : data
+
+  const latest = filtered[filtered.length - 1]
+  const first = filtered[0]
   const startFollowers = (first['フォロワー数'] || 0) - (first['フォロワー増減'] || 0)
   const endFollowers = latest['フォロワー数'] || 0
   const netGain = endFollowers - startFollowers
-  const dailyAvg = data.length > 0 ? (netGain / data.length).toFixed(1) : 0
+  const dailyAvg = filtered.length > 0 ? (netGain / filtered.length).toFixed(1) : 0
 
   // フォロワー推移チャート用データ
-  const followerChart = data.map(d => ({
-    date: String(d['日付']).replace(/^\d{4}\//, ''),
+  const followerChart = filtered.map(d => ({
+    date: formatDate(d['日付']),
     followers: d['フォロワー数'],
     delta: d['フォロワー増減'],
   }))
 
   // 日次指標チャート
-  const dailyChart = data.map(d => ({
-    date: String(d['日付']).replace(/^\d{4}\//, ''),
+  const dailyChart = filtered.map(d => ({
+    date: formatDate(d['日付']),
     views: d['閲覧数'] || 0,
     interactions: d['インタラクション数'] || 0,
   }))
 
   return (
     <div>
+      {/* 期間セレクター */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 14, background: C.bg, padding: 3, borderRadius: 8, border: `1px solid ${C.cardBorder}`, width: 'fit-content' }}>
+        {PERIOD_OPTIONS.map(o => (
+          <button key={o.key} onClick={() => setPeriod(o.key)} style={{
+            padding: '5px 14px', border: 'none', borderRadius: 6, cursor: 'pointer',
+            fontSize: 12, fontWeight: 600, transition: 'all 0.2s',
+            background: period === o.key ? C.accent : 'transparent',
+            color: period === o.key ? '#fff' : C.textMuted,
+          }}>{o.label}</button>
+        ))}
+      </div>
+
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         <KpiCard label="現在のフォロワー" value={endFollowers.toLocaleString()} sub={`開始時 ${startFollowers.toLocaleString()}`} accent />
-        <KpiCard label="フォロワー純増" value={`+${netGain.toLocaleString()}`} sub={`${data.length}日間`} />
+        <KpiCard label="フォロワー純増" value={`+${netGain.toLocaleString()}`} sub={`${filtered.length}日間`} />
         <KpiCard label="日平均純増" value={`${dailyAvg}人`} />
         <KpiCard label="昨日の閲覧数" value={(latest['閲覧数'] || 0).toLocaleString()} />
         <KpiCard label="昨日のインタラクション" value={(latest['インタラクション数'] || 0).toLocaleString()} />
@@ -193,14 +229,14 @@ function AccountTab({ data }) {
         </ResponsiveContainer>
       </div>
 
-      {/* フォロワー属性 */}
-      {latest['フォロワー都市TOP5'] && (
+      {/* フォロワー属性（常に最新データを使用） */}
+      {data[data.length - 1]['フォロワー都市TOP5'] && (
         <>
           <SectionTitle>フォロワー属性</SectionTitle>
           <div style={{ background: C.card, borderRadius: 12, border: `1px solid ${C.cardBorder}`, padding: 16, fontSize: 12, color: C.textSub, lineHeight: 1.8 }}>
-            <div><strong style={{ color: C.text }}>都市TOP5:</strong> {latest['フォロワー都市TOP5']}</div>
-            <div><strong style={{ color: C.text }}>国TOP5:</strong> {latest['フォロワー国TOP5']}</div>
-            <div><strong style={{ color: C.text }}>性別×年齢:</strong> {latest['フォロワー性別年齢']}</div>
+            <div><strong style={{ color: C.text }}>都市TOP5:</strong> {data[data.length - 1]['フォロワー都市TOP5']}</div>
+            <div><strong style={{ color: C.text }}>国TOP5:</strong> {data[data.length - 1]['フォロワー国TOP5']}</div>
+            <div><strong style={{ color: C.text }}>性別×年齢:</strong> {data[data.length - 1]['フォロワー性別年齢']}</div>
           </div>
         </>
       )}
