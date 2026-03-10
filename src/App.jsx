@@ -41,23 +41,23 @@ const formatDate = (raw) => {
   return m ? `${parseInt(m[1])}/${parseInt(m[2])}` : String(raw)
 }
 
-/** ツールチップ用: YY/MM/DD 形式 */
+/** ツールチップ用: YYYY/MM/DD 形式 */
 const formatDateLong = (raw) => {
   const d = parseDate(raw)
-  if (d) return `${String(d.getFullYear()).slice(-2)}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`
+  if (d) return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`
   const m = String(raw).match(/(\d{2,4})[\/\-](\d{1,2})[\/\-](\d{1,2})/)
-  if (m) return `${m[1].slice(-2)}/${m[2].padStart(2, '0')}/${m[3].padStart(2, '0')}`
+  if (m) return `${m[1].padStart(4, '20')}/${m[2].padStart(2, '0')}/${m[3].padStart(2, '0')}`
   return String(raw)
 }
 
-/** データ配列から年が変わった最初のデータポイントを抽出し、年ラベル付きで返す */
+/** データ配列から年が変わった最初のデータポイントのインデックスと年を返す */
 const getYearBoundaries = (chartData) => {
   const results = []
   for (let i = 1; i < chartData.length; i++) {
     const prev = parseDate(chartData[i - 1].rawDate)
     const curr = parseDate(chartData[i].rawDate)
     if (prev && curr && prev.getFullYear() !== curr.getFullYear()) {
-      results.push({ date: chartData[i].date, year: curr.getFullYear() })
+      results.push({ idx: i, year: curr.getFullYear() })
     }
   }
   return results
@@ -174,7 +174,8 @@ function AccountTab({ data }) {
   const dailyAvg = filtered.length > 0 ? (netGain / filtered.length).toFixed(1) : 0
 
   // フォロワー推移チャート用データ
-  const followerChart = filtered.map(d => ({
+  const followerChart = filtered.map((d, i) => ({
+    idx: i,
     date: formatDate(d['日付']),
     rawDate: d['日付'],
     tooltipDate: formatDateLong(d['日付']),
@@ -183,7 +184,8 @@ function AccountTab({ data }) {
   }))
 
   // 日次指標チャート
-  const dailyChart = filtered.map(d => ({
+  const dailyChart = filtered.map((d, i) => ({
+    idx: i,
     date: formatDate(d['日付']),
     rawDate: d['日付'],
     tooltipDate: formatDateLong(d['日付']),
@@ -221,13 +223,15 @@ function AccountTab({ data }) {
         <ResponsiveContainer width="100%" height={280}>
           <LineChart data={followerChart}>
             <CartesianGrid strokeDasharray="3 3" stroke={C.cardBorder} />
-            <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.textMuted }} tickLine={false} />
+            <XAxis dataKey="idx" type="number" domain={[0, followerChart.length - 1]}
+              tickFormatter={i => followerChart[Math.round(i)]?.date || ''}
+              tick={{ fontSize: 10, fill: C.textMuted }} tickLine={false} />
             <YAxis tick={{ fontSize: 10, fill: C.textMuted }} tickLine={false} axisLine={false}
               domain={['dataMin - 100', 'dataMax + 100']}
               tickFormatter={v => `${(v / 1000).toFixed(1)}K`} />
             <Tooltip content={<ChartTooltip />} />
             {followerNewYears.map(ny => (
-              <ReferenceLine key={ny.year} x={ny.date} stroke={C.textMuted} strokeWidth={1.5}
+              <ReferenceLine key={ny.year} x={ny.idx} stroke={C.textMuted} strokeWidth={1.5} strokeDasharray=""
                 label={{ value: ny.year, position: 'top', fontSize: 10, fontWeight: 700, fill: C.textSub }} />
             ))}
             <Line type="monotone" dataKey="followers" name="フォロワー数" stroke={C.accent} strokeWidth={2.5} dot={false} />
@@ -240,11 +244,13 @@ function AccountTab({ data }) {
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={followerChart}>
             <CartesianGrid strokeDasharray="3 3" stroke={C.cardBorder} vertical={false} />
-            <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.textMuted }} tickLine={false} />
+            <XAxis dataKey="idx" type="number" domain={[0, followerChart.length - 1]}
+              tickFormatter={i => followerChart[Math.round(i)]?.date || ''}
+              tick={{ fontSize: 10, fill: C.textMuted }} tickLine={false} />
             <YAxis tick={{ fontSize: 10, fill: C.textMuted }} tickLine={false} axisLine={false} />
             <Tooltip content={<ChartTooltip />} />
             {followerNewYears.map(ny => (
-              <ReferenceLine key={ny.year} x={ny.date} stroke={C.textMuted} strokeWidth={1.5}
+              <ReferenceLine key={ny.year} x={ny.idx} stroke={C.textMuted} strokeWidth={1.5} strokeDasharray=""
                 label={{ value: ny.year, position: 'top', fontSize: 10, fontWeight: 700, fill: C.textSub }} />
             ))}
             <Bar dataKey="delta" name="増減" radius={[3, 3, 0, 0]}>
@@ -261,12 +267,14 @@ function AccountTab({ data }) {
         <ResponsiveContainer width="100%" height={200}>
           <LineChart data={dailyChart}>
             <CartesianGrid strokeDasharray="3 3" stroke={C.cardBorder} />
-            <XAxis dataKey="date" tick={{ fontSize: 10, fill: C.textMuted }} tickLine={false} />
+            <XAxis dataKey="idx" type="number" domain={[0, dailyChart.length - 1]}
+              tickFormatter={i => dailyChart[Math.round(i)]?.date || ''}
+              tick={{ fontSize: 10, fill: C.textMuted }} tickLine={false} />
             <YAxis tick={{ fontSize: 10, fill: C.textMuted }} tickLine={false} axisLine={false} />
             <Tooltip content={<ChartTooltip />} />
             <Legend wrapperStyle={{ fontSize: 11 }} />
             {dailyNewYears.map(ny => (
-              <ReferenceLine key={ny.year} x={ny.date} stroke={C.textMuted} strokeWidth={1.5}
+              <ReferenceLine key={ny.year} x={ny.idx} stroke={C.textMuted} strokeWidth={1.5} strokeDasharray=""
                 label={{ value: ny.year, position: 'top', fontSize: 10, fontWeight: 700, fill: C.textSub }} />
             ))}
             <Line type="monotone" dataKey="views" name="閲覧数" stroke={C.blue} strokeWidth={2} dot={false} />
