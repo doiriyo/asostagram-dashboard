@@ -50,15 +50,17 @@ const formatDateLong = (raw) => {
   return String(raw)
 }
 
-/** データ配列から1月1日のエントリを抽出し、年ラベル付きで返す */
-const getNewYearLines = (chartData) => {
-  return chartData.filter(d => {
-    const p = parseDate(d.rawDate)
-    return p && p.getMonth() === 0 && p.getDate() === 1
-  }).map(d => {
-    const p = parseDate(d.rawDate)
-    return { date: d.date, year: p.getFullYear() }
-  })
+/** データ配列から年が変わった最初のデータポイントを抽出し、年ラベル付きで返す */
+const getYearBoundaries = (chartData) => {
+  const results = []
+  for (let i = 1; i < chartData.length; i++) {
+    const prev = parseDate(chartData[i - 1].rawDate)
+    const curr = parseDate(chartData[i].rawDate)
+    if (prev && curr && prev.getFullYear() !== curr.getFullYear()) {
+      results.push({ date: chartData[i].date, year: curr.getFullYear() })
+    }
+  }
+  return results
 }
 
 // ── 共通コンポーネント ──
@@ -189,8 +191,8 @@ function AccountTab({ data }) {
     interactions: d['インタラクション数'] || 0,
   }))
 
-  const followerNewYears = getNewYearLines(followerChart)
-  const dailyNewYears = getNewYearLines(dailyChart)
+  const followerNewYears = getYearBoundaries(followerChart)
+  const dailyNewYears = getYearBoundaries(dailyChart)
 
   return (
     <div>
