@@ -846,14 +846,19 @@ function doGet(e) {
   let result;
 
   try {
-    switch (type) {
-      case 'account': result = getSheetData(ss, SHEET_NAMES.ACCOUNT, from); break;
-      case 'feed': result = getSheetData(ss, SHEET_NAMES.FEED, from); break;
-      case 'reels': result = getSheetData(ss, SHEET_NAMES.REELS, from); break;
-      case 'stories': result = getSheetData(ss, SHEET_NAMES.STORIES, from); break;
-      case 'titles': result = getTitlesData(ss); break;
-      case 'summary': result = getSummaryData(ss, from); break;
-      default: result = { error: 'Unknown type. Use: account, feed, reels, stories, titles, summary' };
+    // タイトル保存（GETベース: CORSプリフライト回避のため）
+    if (e.parameter.action === 'setTitle' && e.parameter.key) {
+      result = saveTitleData(ss, e.parameter.key, e.parameter.title || '');
+    } else {
+      switch (type) {
+        case 'account': result = getSheetData(ss, SHEET_NAMES.ACCOUNT, from); break;
+        case 'feed': result = getSheetData(ss, SHEET_NAMES.FEED, from); break;
+        case 'reels': result = getSheetData(ss, SHEET_NAMES.REELS, from); break;
+        case 'stories': result = getSheetData(ss, SHEET_NAMES.STORIES, from); break;
+        case 'titles': result = getTitlesData(ss); break;
+        case 'summary': result = getSummaryData(ss, from); break;
+        default: result = { error: 'Unknown type. Use: account, feed, reels, stories, titles, summary' };
+      }
     }
   } catch (err) {
     result = { error: err.message };
@@ -911,6 +916,23 @@ function getSheetData(ss, sheetName, from) {
     rows.push(row);
   }
   return { type: sheetName, count: rows.length, data: rows };
+}
+
+function saveTitleData(ss, key, title) {
+  let sheet = ss.getSheetByName(SHEET_NAMES.TITLES);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_NAMES.TITLES);
+    sheet.appendRow(['キー', 'タイトル']);
+  }
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === key) {
+      sheet.getRange(i + 1, 2).setValue(title);
+      return { success: true, updated: true };
+    }
+  }
+  sheet.appendRow([key, title]);
+  return { success: true, created: true };
 }
 
 function getTitlesData(ss) {

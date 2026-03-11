@@ -5,7 +5,7 @@ import {
 } from 'recharts'
 
 // ── API設定 ──
-const API_URL = 'https://script.google.com/macros/s/AKfycbwZrquZHxkXr571yubQh3SZDzY4qlZZ0TwP-MRh9axZusoBuOJZFfTpznIv0zzq7Tazrw/exec'
+const API_URL = 'https://script.google.com/macros/s/AKfycbwQteYvuJN7dDGcSTlLWq5p3pxhsNTHde1Ia77mCp7xG7z-8CjJVH-zvEFjVEwmwDjiCQ/exec'
 
 // ── カラーテーマ ──
 const C = {
@@ -637,11 +637,8 @@ export default function App() {
   const handleSaveTitle = useCallback(async (contentKey, title) => {
     setTitleMap(prev => ({ ...prev, [contentKey]: title }))
     try {
-      await fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'setTitle', key: contentKey, title }),
-      })
+      const params = new URLSearchParams({ action: 'setTitle', key: contentKey, title })
+      await fetch(`${API_URL}?${params}`)
     } catch { /* 保存失敗時もローカル状態は維持 */ }
   }, [])
 
