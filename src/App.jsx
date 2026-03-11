@@ -5,7 +5,7 @@ import {
 } from 'recharts'
 
 // ── API設定 ──
-const API_URL = 'https://script.google.com/macros/s/AKfycbyzC0PGLFpLWQASgq62nv2QNLdamPOov_mceROMQqns0IwHjuD4XKXLdijdX-SYf8Yo7Q/exec'
+const API_URL = 'https://script.google.com/macros/s/AKfycbw_P7Nw3YUMWblIbDZPeUDE6nVoaDrHNAvORhqdVupWkwKNiB63Z2FnJ1jZwLHwWVHxwQ/exec'
 
 // ── カラーテーマ ──
 const C = {
@@ -356,9 +356,109 @@ function AccountTab({ data }) {
 }
 
 
+// ── タイトル編集コンポーネント ──
+
+const EditableTitle = ({ content, title, onSave }) => {
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(title || '')
+
+  const handleSave = () => {
+    onSave(content, value)
+    setEditing(false)
+  }
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') handleSave()
+    if (e.key === 'Escape') { setValue(title || ''); setEditing(false) }
+  }
+
+  if (editing) {
+    return (
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+        <input
+          value={value} onChange={e => setValue(e.target.value)}
+          onKeyDown={handleKeyDown} autoFocus
+          style={{
+            flex: 1, padding: '3px 6px', border: `1px solid ${C.accent}`, borderRadius: 4,
+            fontSize: 12, fontFamily: 'inherit', outline: 'none', minWidth: 120,
+          }}
+          placeholder="タイトルを入力"
+        />
+        <button onClick={handleSave} style={{
+          padding: '2px 8px', border: 'none', borderRadius: 4, background: C.accent,
+          color: '#fff', fontSize: 10, cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap',
+        }}>保存</button>
+        <button onClick={() => { setValue(title || ''); setEditing(false) }} style={{
+          padding: '2px 8px', border: `1px solid ${C.cardBorder}`, borderRadius: 4,
+          background: 'transparent', color: C.textMuted, fontSize: 10, cursor: 'pointer', whiteSpace: 'nowrap',
+        }}>✕</button>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }} onClick={() => setEditing(true)}>
+      <span style={{
+        maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        color: title ? C.text : C.textMuted,
+      }}>
+        {title || content || '—'}
+      </span>
+      <span style={{ fontSize: 10, color: C.textMuted, flexShrink: 0 }}>✏️</span>
+    </div>
+  )
+}
+
+// ── タイトル付きデータテーブル ──
+
+const TitledDataTable = ({ headers, rows, titleMap, onSaveTitle, titleColIndex = 1, maxRows = 25 }) => (
+  <div style={{ overflowX: 'auto' }}>
+    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+      <thead>
+        <tr>
+          {headers.map((h, i) => (
+            <th key={i} style={{
+              textAlign: i === 0 || i === titleColIndex ? 'left' : 'right',
+              padding: '8px 10px', color: C.textMuted, fontWeight: 600,
+              borderBottom: `2px solid ${C.cardBorder}`, whiteSpace: 'nowrap',
+            }}>{h}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.slice(0, maxRows).map((row, i) => (
+          <tr key={i} style={{ borderBottom: `1px solid ${C.cardBorder}` }}>
+            {row.map((cell, j) => (
+              <td key={j} style={{
+                textAlign: j === 0 || j === titleColIndex ? 'left' : 'right',
+                padding: '8px 10px', color: j <= titleColIndex ? C.text : C.textSub,
+                fontWeight: j <= titleColIndex ? 600 : 400,
+                maxWidth: j === titleColIndex ? 220 : 'none',
+                overflow: j === titleColIndex ? 'visible' : 'hidden',
+                textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                {j === titleColIndex ? (
+                  <EditableTitle
+                    content={cell.content}
+                    title={titleMap[cell.content]}
+                    onSave={onSaveTitle}
+                  />
+                ) : (
+                  typeof cell === 'number' ? cell.toLocaleString() : cell
+                )}
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+)
+
+
 // ── 通常投稿タブ ──
 
-function FeedTab({ data }) {
+function FeedTab({ data, titleMap, onSaveTitle }) {
   if (!data || data.length === 0) return <ErrorMsg message="通常投稿のデータがまだありません" />
 
   const totalReach = data.reduce((s, d) => s + (d['リーチ'] || 0), 0)
@@ -382,13 +482,15 @@ function FeedTab({ data }) {
 
       <SectionTitle>投稿一覧（リーチ順）</SectionTitle>
       <div style={{ background: C.card, borderRadius: 12, border: `1px solid ${C.cardBorder}`, padding: 16 }}>
-        <DataTable
-          headers={['投稿日', '内容', 'タイプ', '閲覧数', 'リーチ', 'いいね', '保存', 'シェア', 'フォロー']}
+        <TitledDataTable
+          headers={['投稿日', 'タイトル', 'タイプ', '閲覧数', 'リーチ', 'いいね', '保存', 'シェア', 'フォロー']}
           rows={sorted.map(d => [
-            d['投稿日'], d['内容'], d['メディアタイプ'],
+            formatDateLong(d['投稿日']), { content: d['内容'] }, d['メディアタイプ'],
             d['閲覧数'] || 0, d['リーチ'] || 0, d['いいね'] || 0,
             d['保存数'] || 0, d['シェア'] || 0, d['フォロー数'] || 0,
           ])}
+          titleMap={titleMap}
+          onSaveTitle={onSaveTitle}
           maxRows={25}
         />
       </div>
@@ -399,7 +501,7 @@ function FeedTab({ data }) {
 
 // ── リールタブ ──
 
-function ReelsTab({ data }) {
+function ReelsTab({ data, titleMap, onSaveTitle }) {
   if (!data || data.length === 0) return <ErrorMsg message="リールのデータがまだありません" />
 
   const totalViews = data.reduce((s, d) => s + (d['閲覧数'] || 0), 0)
@@ -417,7 +519,7 @@ function ReelsTab({ data }) {
 
   // リーチ棒グラフ
   const chartData = sorted.slice(0, 10).map(d => ({
-    name: (d['内容'] || '').substring(0, 15),
+    name: (titleMap[d['内容']] || (d['内容'] || '').substring(0, 15)),
     views: d['閲覧数'] || 0,
     reach: d['リーチ'] || 0,
   }))
@@ -450,13 +552,15 @@ function ReelsTab({ data }) {
 
       <SectionTitle>リール一覧（閲覧数順）</SectionTitle>
       <div style={{ background: C.card, borderRadius: 12, border: `1px solid ${C.cardBorder}`, padding: 16 }}>
-        <DataTable
-          headers={['投稿日', '内容', '閲覧数', 'リーチ', 'いいね', '保存', 'シェア', '平均視聴(秒)']}
+        <TitledDataTable
+          headers={['投稿日', 'タイトル', '閲覧数', 'リーチ', 'いいね', '保存', 'シェア', '平均視聴(秒)']}
           rows={sorted.map(d => [
-            d['投稿日'], d['内容'],
+            formatDateLong(d['投稿日']), { content: d['内容'] },
             d['閲覧数'] || 0, d['リーチ'] || 0, d['いいね'] || 0,
             d['保存数'] || 0, d['シェア'] || 0, d['平均視聴時間(秒)'] || 0,
           ])}
+          titleMap={titleMap}
+          onSaveTitle={onSaveTitle}
           maxRows={25}
         />
       </div>
@@ -499,6 +603,7 @@ function StoriesTab({ data }) {
 export default function App() {
   const [tab, setTab] = useState('account')
   const [data, setData] = useState({})
+  const [titleMap, setTitleMap] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(null)
@@ -514,6 +619,12 @@ export default function App() {
         const json = await res.json()
         results[type] = json.data || []
       }
+      // タイトルマッピングを取得
+      try {
+        const titlesRes = await fetch(`${API_URL}?type=titles`)
+        const titlesJson = await titlesRes.json()
+        setTitleMap(titlesJson.data || {})
+      } catch { /* タイトル取得失敗は無視 */ }
       setData(results)
       setLastUpdated(new Date())
     } catch (e) {
@@ -521,6 +632,17 @@ export default function App() {
     } finally {
       setLoading(false)
     }
+  }, [])
+
+  const handleSaveTitle = useCallback(async (contentKey, title) => {
+    setTitleMap(prev => ({ ...prev, [contentKey]: title }))
+    try {
+      await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'setTitle', key: contentKey, title }),
+      })
+    } catch { /* 保存失敗時もローカル状態は維持 */ }
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
@@ -579,8 +701,8 @@ export default function App() {
       {loading ? <Loading /> : error ? <ErrorMsg message={error} onRetry={fetchData} /> : (
         <>
           {tab === 'account' && <AccountTab data={data.account} />}
-          {tab === 'feed' && <FeedTab data={data.feed} />}
-          {tab === 'reels' && <ReelsTab data={data.reels} />}
+          {tab === 'feed' && <FeedTab data={data.feed} titleMap={titleMap} onSaveTitle={handleSaveTitle} />}
+          {tab === 'reels' && <ReelsTab data={data.reels} titleMap={titleMap} onSaveTitle={handleSaveTitle} />}
           {tab === 'stories' && <StoriesTab data={data.stories} />}
         </>
       )}
