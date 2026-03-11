@@ -851,13 +851,14 @@ function doGet(e) {
       result = saveTitleData(ss, e.parameter.key, e.parameter.title || '');
     } else {
       switch (type) {
+        case 'all': result = getAllData(ss, from); break;
         case 'account': result = getSheetData(ss, SHEET_NAMES.ACCOUNT, from); break;
         case 'feed': result = getSheetData(ss, SHEET_NAMES.FEED, from); break;
         case 'reels': result = getSheetData(ss, SHEET_NAMES.REELS, from); break;
         case 'stories': result = getSheetData(ss, SHEET_NAMES.STORIES, from); break;
         case 'titles': result = getTitlesData(ss); break;
         case 'summary': result = getSummaryData(ss, from); break;
-        default: result = { error: 'Unknown type. Use: account, feed, reels, stories, titles, summary' };
+        default: result = { error: 'Unknown type. Use: all, account, feed, reels, stories, titles, summary' };
       }
     }
   } catch (err) {
@@ -898,6 +899,17 @@ function doPost(e) {
     return ContentService.createTextOutput(JSON.stringify({ error: err.message }))
       .setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+function getAllData(ss, from) {
+  return {
+    type: 'all',
+    account: getSheetData(ss, SHEET_NAMES.ACCOUNT, from),
+    feed: getSheetData(ss, SHEET_NAMES.FEED, from),
+    reels: getSheetData(ss, SHEET_NAMES.REELS, from),
+    stories: getSheetData(ss, SHEET_NAMES.STORIES, from),
+    titles: getTitlesData(ss),
+  };
 }
 
 function getSheetData(ss, sheetName, from) {

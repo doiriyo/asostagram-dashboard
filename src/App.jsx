@@ -673,19 +673,15 @@ export default function App() {
     setLoading(true)
     setError(null)
     try {
-      const types = ['account', 'feed', 'reels', 'stories', 'titles']
-      const responses = await Promise.all(
-        types.map(type => fetch(`${API_URL}?type=${type}`).then(r => r.json()))
-      )
-      const results = {}
-      types.forEach((type, i) => {
-        if (type === 'titles') {
-          setTitleMap(responses[i].data || {})
-        } else {
-          results[type] = responses[i].data || []
-        }
+      const res = await fetch(`${API_URL}?type=all`)
+      const json = await res.json()
+      setData({
+        account: json.account?.data || [],
+        feed: json.feed?.data || [],
+        reels: json.reels?.data || [],
+        stories: json.stories?.data || [],
       })
-      setData(results)
+      setTitleMap(json.titles?.data || {})
       setLastUpdated(new Date())
     } catch (e) {
       setError(`データの取得に失敗しました: ${e.message}`)
