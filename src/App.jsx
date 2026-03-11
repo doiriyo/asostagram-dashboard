@@ -573,7 +573,7 @@ function ReelsTab({ data, titleMap, onSaveTitle }) {
 
   const avgWatchTimes = data.filter(d => d['平均視聴時間(秒)'] > 0)
   const overallAvgWatch = avgWatchTimes.length > 0
-    ? (avgWatchTimes.reduce((s, d) => s + d['平均視聴時間(秒)'], 0) / avgWatchTimes.length).toFixed(1)
+    ? (avgWatchTimes.reduce((s, d) => s + d['平均視聴時間(秒)'], 0) / avgWatchTimes.length / 1000).toFixed(2)
     : '—'
 
   const sorted = [...data].sort((a, b) => (b['閲覧数'] || 0) - (a['閲覧数'] || 0))
@@ -618,7 +618,7 @@ function ReelsTab({ data, titleMap, onSaveTitle }) {
           rows={data.map(d => [
             formatDateLong(d['投稿日']), { content: d['内容'] },
             d['閲覧数'] || 0, d['リーチ'] || 0, d['いいね'] || 0,
-            d['保存数'] || 0, d['シェア'] || 0, d['平均視聴時間(秒)'] || 0,
+            d['保存数'] || 0, d['シェア'] || 0, +((d['平均視聴時間(秒)'] || 0) / 1000).toFixed(2),
           ])}
           titleMap={titleMap}
           onSaveTitle={onSaveTitle}
