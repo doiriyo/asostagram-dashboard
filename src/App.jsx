@@ -257,8 +257,8 @@ function AccountTab({ data }) {
       <SectionTitle>フォロワー推移</SectionTitle>
       <div style={{ background: C.card, borderRadius: 12, border: `1px solid ${C.cardBorder}`, padding: '16px 12px 8px' }}>
         <ResponsiveContainer width="100%" height={280}>
-          <LineChart data={followerChart}>
-            <CartesianGrid strokeDasharray="3 3" stroke={C.cardBorder} />
+          <LineChart data={followerChart} margin={{ top: 20 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={C.cardBorder} vertical={followerBoundaries.length === 0} />
             <XAxis dataKey="idx" type="number" domain={[0, followerChart.length - 1]}
               tickFormatter={i => followerChart[Math.round(i)]?.date || ''}
               tick={{ fontSize: 10, fill: C.textMuted }} tickLine={false} />
@@ -272,8 +272,9 @@ function AccountTab({ data }) {
             ))}
             {followerBoundaries.map((b, i) => (
               <ReferenceLine key={`fb-${i}`} x={b.idx}
-                stroke={C.textMuted} strokeWidth={b.type === 'year' ? 1.5 : 1}
-                strokeDasharray={b.type === 'year' ? '' : '4 3'}
+                stroke={b.type === 'year' ? C.textMuted : C.cardBorder}
+                strokeWidth={b.type === 'year' ? 1.5 : 1}
+                strokeDasharray={b.type === 'year' ? '' : '3 3'}
                 label={<BoundaryDateLabel value={b.dateLabel} />} />
             ))}
             <Line type="monotone" dataKey="followers" name="フォロワー数" stroke={C.accent} strokeWidth={2.5} dot={false} />
@@ -284,7 +285,7 @@ function AccountTab({ data }) {
       <SectionTitle>フォロワー増減（日次）</SectionTitle>
       <div style={{ background: C.card, borderRadius: 12, border: `1px solid ${C.cardBorder}`, padding: '16px 12px 8px' }}>
         <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={followerChart}>
+          <BarChart data={followerChart} margin={{ top: 20 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={C.cardBorder} vertical={false} />
             <XAxis dataKey="idx" type="number" domain={[0, followerChart.length - 1]}
               tickFormatter={i => followerChart[Math.round(i)]?.date || ''}
@@ -297,8 +298,9 @@ function AccountTab({ data }) {
             ))}
             {followerBoundaries.map((b, i) => (
               <ReferenceLine key={`fb2-${i}`} x={b.idx}
-                stroke={C.textMuted} strokeWidth={b.type === 'year' ? 1.5 : 1}
-                strokeDasharray={b.type === 'year' ? '' : '4 3'}
+                stroke={b.type === 'year' ? C.textMuted : C.cardBorder}
+                strokeWidth={b.type === 'year' ? 1.5 : 1}
+                strokeDasharray={b.type === 'year' ? '' : '3 3'}
                 label={<BoundaryDateLabel value={b.dateLabel} />} />
             ))}
             <Bar dataKey="delta" name="増減" radius={[3, 3, 0, 0]}>
@@ -313,8 +315,8 @@ function AccountTab({ data }) {
       <SectionTitle>閲覧数・インタラクション（日次）</SectionTitle>
       <div style={{ background: C.card, borderRadius: 12, border: `1px solid ${C.cardBorder}`, padding: '16px 12px 8px' }}>
         <ResponsiveContainer width="100%" height={200}>
-          <LineChart data={dailyChart}>
-            <CartesianGrid strokeDasharray="3 3" stroke={C.cardBorder} />
+          <LineChart data={dailyChart} margin={{ top: 20 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke={C.cardBorder} vertical={dailyBoundaries.length === 0} />
             <XAxis dataKey="idx" type="number" domain={[0, dailyChart.length - 1]}
               tickFormatter={i => dailyChart[Math.round(i)]?.date || ''}
               tick={{ fontSize: 10, fill: C.textMuted }} tickLine={false} />
@@ -327,8 +329,9 @@ function AccountTab({ data }) {
             ))}
             {dailyBoundaries.map((b, i) => (
               <ReferenceLine key={`db-${i}`} x={b.idx}
-                stroke={C.textMuted} strokeWidth={b.type === 'year' ? 1.5 : 1}
-                strokeDasharray={b.type === 'year' ? '' : '4 3'}
+                stroke={b.type === 'year' ? C.textMuted : C.cardBorder}
+                strokeWidth={b.type === 'year' ? 1.5 : 1}
+                strokeDasharray={b.type === 'year' ? '' : '3 3'}
                 label={<BoundaryDateLabel value={b.dateLabel} />} />
             ))}
             <Line type="monotone" dataKey="views" name="閲覧数" stroke={C.blue} strokeWidth={2} dot={false} />
