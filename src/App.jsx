@@ -673,19 +673,18 @@ export default function App() {
     setLoading(true)
     setError(null)
     try {
-      const types = ['account', 'feed', 'reels', 'stories']
+      const types = ['account', 'feed', 'reels', 'stories', 'titles']
+      const responses = await Promise.all(
+        types.map(type => fetch(`${API_URL}?type=${type}`).then(r => r.json()))
+      )
       const results = {}
-      for (const type of types) {
-        const res = await fetch(`${API_URL}?type=${type}`)
-        const json = await res.json()
-        results[type] = json.data || []
-      }
-      // タイトルマッピングを取得
-      try {
-        const titlesRes = await fetch(`${API_URL}?type=titles`)
-        const titlesJson = await titlesRes.json()
-        setTitleMap(titlesJson.data || {})
-      } catch { /* タイトル取得失敗は無視 */ }
+      types.forEach((type, i) => {
+        if (type === 'titles') {
+          setTitleMap(responses[i].data || {})
+        } else {
+          results[type] = responses[i].data || []
+        }
+      })
       setData(results)
       setLastUpdated(new Date())
     } catch (e) {
