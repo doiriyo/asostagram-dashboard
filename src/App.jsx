@@ -132,38 +132,93 @@ const ChartTooltip = ({ active, payload, label }) => {
   )
 }
 
-const DataTable = ({ headers, rows, maxRows = 10 }) => (
-  <div style={{ overflowX: 'auto' }}>
-    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-      <thead>
-        <tr>
-          {headers.map((h, i) => (
-            <th key={i} style={{
-              textAlign: i === 0 || i === 1 ? 'left' : 'right',
-              padding: '8px 10px', color: C.textMuted, fontWeight: 600,
-              borderBottom: `2px solid ${C.cardBorder}`, whiteSpace: 'nowrap',
-            }}>{h}</th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.slice(0, maxRows).map((row, i) => (
-          <tr key={i} style={{ borderBottom: `1px solid ${C.cardBorder}` }}>
-            {row.map((cell, j) => (
-              <td key={j} style={{
-                textAlign: j === 0 || j === 1 ? 'left' : 'right',
-                padding: '8px 10px', color: j <= 1 ? C.text : C.textSub,
-                fontWeight: j <= 1 ? 600 : 400,
-                maxWidth: j === 1 ? 200 : 'none',
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              }}>{typeof cell === 'number' ? cell.toLocaleString() : cell}</td>
+/** ソート可能なカラムか判定（数値 or 日付文字列） */
+const isSortableColumn = (rows, colIndex) => {
+  for (const row of rows) {
+    const cell = row[colIndex]
+    if (cell == null || cell === '' || cell === 0) continue
+    if (typeof cell === 'number') return true
+    if (typeof cell === 'string' && /^\d{4}\/\d{1,2}\/\d{1,2}$/.test(cell)) return true
+    return false
+  }
+  return false
+}
+
+/** セル値の比較（数値 or 日付文字列） */
+const compareCells = (a, b) => {
+  if (typeof a === 'number' && typeof b === 'number') return a - b
+  return String(a || '').localeCompare(String(b || ''), 'ja')
+}
+
+/** ソートインジケーター */
+const SortIndicator = ({ direction }) => (
+  <span style={{ marginLeft: 3, fontSize: 10, color: C.accent }}>
+    {direction === 'asc' ? '▲' : '▼'}
+  </span>
+)
+
+const useSortableTable = (rows, defaultSortCol = 0, defaultDir = 'desc') => {
+  const [sortCol, setSortCol] = useState(defaultSortCol)
+  const [sortDir, setSortDir] = useState(defaultDir)
+
+  const handleSort = (colIndex) => {
+    if (sortCol === colIndex) {
+      setSortDir(prev => prev === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortCol(colIndex)
+      setSortDir('desc')
+    }
+  }
+
+  const sortedRows = [...rows].sort((a, b) => {
+    const result = compareCells(a[sortCol], b[sortCol])
+    return sortDir === 'asc' ? result : -result
+  })
+
+  return { sortedRows, sortCol, sortDir, handleSort }
+}
+
+const DataTable = ({ headers, rows, maxRows = 10 }) => {
+  const { sortedRows, sortCol, sortDir, handleSort } = useSortableTable(rows)
+  const sortable = headers.map((_, i) => isSortableColumn(rows, i))
+
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+        <thead>
+          <tr>
+            {headers.map((h, i) => (
+              <th key={i} onClick={() => sortable[i] && handleSort(i)} style={{
+                textAlign: i === 0 || i === 1 ? 'left' : 'right',
+                padding: '8px 10px', color: sortCol === i ? C.accent : C.textMuted, fontWeight: 600,
+                borderBottom: `2px solid ${C.cardBorder}`, whiteSpace: 'nowrap',
+                cursor: sortable[i] ? 'pointer' : 'default',
+                userSelect: 'none',
+              }}>
+                {h}{sortCol === i && <SortIndicator direction={sortDir} />}
+              </th>
             ))}
           </tr>
-        ))}
-      </tbody>
-    </table>
-  </div>
-)
+        </thead>
+        <tbody>
+          {sortedRows.slice(0, maxRows).map((row, i) => (
+            <tr key={i} style={{ borderBottom: `1px solid ${C.cardBorder}` }}>
+              {row.map((cell, j) => (
+                <td key={j} style={{
+                  textAlign: j === 0 || j === 1 ? 'left' : 'right',
+                  padding: '8px 10px', color: j <= 1 ? C.text : C.textSub,
+                  fontWeight: j <= 1 ? 600 : 400,
+                  maxWidth: j === 1 ? 200 : 'none',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>{typeof cell === 'number' ? cell.toLocaleString() : cell}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
 
 const Loading = () => (
   <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 300, color: C.textMuted }}>
@@ -411,49 +466,58 @@ const EditableTitle = ({ content, title, onSave }) => {
 
 // ── タイトル付きデータテーブル ──
 
-const TitledDataTable = ({ headers, rows, titleMap, onSaveTitle, titleColIndex = 1, maxRows = 25 }) => (
-  <div style={{ overflowX: 'auto' }}>
-    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-      <thead>
-        <tr>
-          {headers.map((h, i) => (
-            <th key={i} style={{
-              textAlign: i === 0 || i === titleColIndex ? 'left' : 'right',
-              padding: '8px 10px', color: C.textMuted, fontWeight: 600,
-              borderBottom: `2px solid ${C.cardBorder}`, whiteSpace: 'nowrap',
-            }}>{h}</th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.slice(0, maxRows).map((row, i) => (
-          <tr key={i} style={{ borderBottom: `1px solid ${C.cardBorder}` }}>
-            {row.map((cell, j) => (
-              <td key={j} style={{
-                textAlign: j === 0 || j === titleColIndex ? 'left' : 'right',
-                padding: '8px 10px', color: j <= titleColIndex ? C.text : C.textSub,
-                fontWeight: j <= titleColIndex ? 600 : 400,
-                maxWidth: j === titleColIndex ? 220 : 'none',
-                overflow: j === titleColIndex ? 'visible' : 'hidden',
-                textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+const TitledDataTable = ({ headers, rows, titleMap, onSaveTitle, titleColIndex = 1, maxRows = 25 }) => {
+  const { sortedRows, sortCol, sortDir, handleSort } = useSortableTable(rows)
+  const sortable = headers.map((_, i) => i !== titleColIndex && isSortableColumn(rows, i))
+
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+        <thead>
+          <tr>
+            {headers.map((h, i) => (
+              <th key={i} onClick={() => sortable[i] && handleSort(i)} style={{
+                textAlign: i === 0 || i === titleColIndex ? 'left' : 'right',
+                padding: '8px 10px', color: sortCol === i ? C.accent : C.textMuted, fontWeight: 600,
+                borderBottom: `2px solid ${C.cardBorder}`, whiteSpace: 'nowrap',
+                cursor: sortable[i] ? 'pointer' : 'default',
+                userSelect: 'none',
               }}>
-                {j === titleColIndex ? (
-                  <EditableTitle
-                    content={cell.content}
-                    title={titleMap[cell.content]}
-                    onSave={onSaveTitle}
-                  />
-                ) : (
-                  typeof cell === 'number' ? cell.toLocaleString() : cell
-                )}
-              </td>
+                {h}{sortCol === i && <SortIndicator direction={sortDir} />}
+              </th>
             ))}
           </tr>
-        ))}
-      </tbody>
-    </table>
-  </div>
-)
+        </thead>
+        <tbody>
+          {sortedRows.slice(0, maxRows).map((row, i) => (
+            <tr key={i} style={{ borderBottom: `1px solid ${C.cardBorder}` }}>
+              {row.map((cell, j) => (
+                <td key={j} style={{
+                  textAlign: j === 0 || j === titleColIndex ? 'left' : 'right',
+                  padding: '8px 10px', color: j <= titleColIndex ? C.text : C.textSub,
+                  fontWeight: j <= titleColIndex ? 600 : 400,
+                  maxWidth: j === titleColIndex ? 220 : 'none',
+                  overflow: j === titleColIndex ? 'visible' : 'hidden',
+                  textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                  {j === titleColIndex ? (
+                    <EditableTitle
+                      content={cell.content}
+                      title={titleMap[cell.content]}
+                      onSave={onSaveTitle}
+                    />
+                  ) : (
+                    typeof cell === 'number' ? cell.toLocaleString() : cell
+                  )}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
 
 
 // ── 通常投稿タブ ──
@@ -467,8 +531,6 @@ function FeedTab({ data, titleMap, onSaveTitle }) {
   const totalSaves = data.reduce((s, d) => s + (d['保存数'] || 0), 0)
   const totalFollows = data.reduce((s, d) => s + (d['フォロー数'] || 0), 0)
 
-  const sorted = [...data].sort((a, b) => (b['リーチ'] || 0) - (a['リーチ'] || 0))
-
   return (
     <div>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -480,11 +542,11 @@ function FeedTab({ data, titleMap, onSaveTitle }) {
         <KpiCard label="フォロー獲得" value={totalFollows.toLocaleString()} />
       </div>
 
-      <SectionTitle>投稿一覧（リーチ順）</SectionTitle>
+      <SectionTitle>投稿一覧</SectionTitle>
       <div style={{ background: C.card, borderRadius: 12, border: `1px solid ${C.cardBorder}`, padding: 16 }}>
         <TitledDataTable
           headers={['投稿日', 'タイトル', 'タイプ', '閲覧数', 'リーチ', 'いいね', '保存', 'シェア', 'フォロー']}
-          rows={sorted.map(d => [
+          rows={data.map(d => [
             formatDateLong(d['投稿日']), { content: d['内容'] }, d['メディアタイプ'],
             d['閲覧数'] || 0, d['リーチ'] || 0, d['いいね'] || 0,
             d['保存数'] || 0, d['シェア'] || 0, d['フォロー数'] || 0,
@@ -508,7 +570,6 @@ function ReelsTab({ data, titleMap, onSaveTitle }) {
   const totalReach = data.reduce((s, d) => s + (d['リーチ'] || 0), 0)
   const totalSaves = data.reduce((s, d) => s + (d['保存数'] || 0), 0)
   const totalShares = data.reduce((s, d) => s + (d['シェア'] || 0), 0)
-  const totalInteractions = data.reduce((s, d) => s + (d['インタラクション合計'] || 0), 0)
 
   const avgWatchTimes = data.filter(d => d['平均視聴時間(秒)'] > 0)
   const overallAvgWatch = avgWatchTimes.length > 0
@@ -550,11 +611,11 @@ function ReelsTab({ data, titleMap, onSaveTitle }) {
         </ResponsiveContainer>
       </div>
 
-      <SectionTitle>リール一覧（閲覧数順）</SectionTitle>
+      <SectionTitle>リール一覧</SectionTitle>
       <div style={{ background: C.card, borderRadius: 12, border: `1px solid ${C.cardBorder}`, padding: 16 }}>
         <TitledDataTable
           headers={['投稿日', 'タイトル', '閲覧数', 'リーチ', 'いいね', '保存', 'シェア', '平均視聴(秒)']}
-          rows={sorted.map(d => [
+          rows={data.map(d => [
             formatDateLong(d['投稿日']), { content: d['内容'] },
             d['閲覧数'] || 0, d['リーチ'] || 0, d['いいね'] || 0,
             d['保存数'] || 0, d['シェア'] || 0, d['平均視聴時間(秒)'] || 0,
@@ -587,7 +648,7 @@ function StoriesTab({ data }) {
         <DataTable
           headers={['投稿日', '内容', '閲覧数', 'リーチ', 'シェア', 'フォロー', 'ナビゲーション']}
           rows={data.map(d => [
-            d['投稿日'], d['内容'],
+            formatDateLong(d['投稿日']), d['内容'],
             d['閲覧数'] || 0, d['リーチ'] || 0, d['シェア'] || 0,
             d['フォロー数'] || 0, d['ナビゲーション'] || 0,
           ])}
