@@ -22,4 +22,4 @@ jobs:
           username: ${{ secrets.USER }}
           password: ${{ secrets.PASS }}
           local-dir: ./dist/
-          server-dir: /public_html/asosta-db/
+          server-dir: /asosta-db/
