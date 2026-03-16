@@ -3,5 +3,5 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
-  base: '/asostagram-dashboard/',
+  base: process.env.DEPLOY_TARGET === 'xserver' ? '/asosta-db/' : '/asostagram-dashboard/',
 })
