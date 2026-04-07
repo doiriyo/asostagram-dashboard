@@ -396,6 +396,9 @@ function backfillReelThumbnails() {
 // ══════════════════════════════════════════
 
 function collectFeedInsights() {
+  const startTime = new Date().getTime();
+  const TIME_LIMIT_MS = 5 * 60 * 1000; // 5分で安全停止
+
   const igUserId = getSetting('IG_USER_ID');
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEET_NAMES.FEED);
@@ -409,10 +412,25 @@ function collectFeedInsights() {
   const untilDate = new Date('2026-03-31T23:59:59+09:00');
   const allMedia = fetchAllMediaInRange(igUserId, sinceDate, untilDate);
 
-  let newCount = 0, updateCount = 0;
+  let newCount = 0, updateCount = 0, skippedCount = 0;
 
   for (const media of allMedia) {
+    // 経過時間チェック
+    if (new Date().getTime() - startTime > TIME_LIMIT_MS) {
+      writeLog('INFO', `通常投稿: 5分制限に到達。新規${newCount}件, 更新${updateCount}件, スキップ${skippedCount}件。残りは次回実行で処理します`);
+      return;
+    }
+
     if (media.media_product_type === 'REELS' || media.media_product_type === 'STORY') continue;
+
+    // 既にシートにあり30日以上前の投稿はスキップ（更新不要）
+    if (existingIds.has(media.id)) {
+      const daysSince = (new Date() - new Date(media.timestamp)) / 86400000;
+      if (daysSince > 30) {
+        skippedCount++;
+        continue;
+      }
+    }
 
     const mediaType = media.media_type === 'CAROUSEL_ALBUM' ? 'カルーセル' : '静止画';
 
@@ -430,23 +448,20 @@ function collectFeedInsights() {
     const caption = (media.caption || '').substring(0, 100);
 
     if (existingIds.has(media.id)) {
-      const daysSince = (new Date() - new Date(media.timestamp)) / 86400000;
-      if (daysSince <= 30) {
-        updateRow(sheet, media.id, 13, {
-          4: views,                         // 閲覧数
-          5: base.reach || 0,               // リーチ
-          6: media.like_count || 0,         // いいね
-          7: media.comments_count || 0,     // コメント
-          8: base.saved || 0,               // 保存数
-          9: shares,                        // シェア
-          10: totalInteractions,            // インタラクション合計
-          11: follows,                      // フォロー数
-          12: profileActivity,              // プロフィールアクティビティ
-          13: profileVisits,                // プロフィール訪問数
-          15: new Date(),                   // 最終更新
-        });
-        updateCount++;
-      }
+      updateRow(sheet, media.id, 13, {
+        4: views,                         // 閲覧数
+        5: base.reach || 0,               // リーチ
+        6: media.like_count || 0,         // いいね
+        7: media.comments_count || 0,     // コメント
+        8: base.saved || 0,               // 保存数
+        9: shares,                        // シェア
+        10: totalInteractions,            // インタラクション合計
+        11: follows,                      // フォロー数
+        12: profileActivity,              // プロフィールアクティビティ
+        13: profileVisits,                // プロフィール訪問数
+        15: new Date(),                   // 最終更新
+      });
+      updateCount++;
     } else {
       sheet.appendRow([
         postDate, caption, mediaType,
@@ -456,11 +471,12 @@ function collectFeedInsights() {
         media.id, new Date(),
       ]);
       newCount++;
+      existingIds.add(media.id); // 次回実行時の重複防止
     }
     Utilities.sleep(1000);
   }
 
-  writeLog('INFO', `通常投稿: 新規${newCount}件, 更新${updateCount}件`);
+  writeLog('INFO', `通常投稿: 新規${newCount}件, 更新${updateCount}件, スキップ${skippedCount}件（完了）`);
 }
 
 
