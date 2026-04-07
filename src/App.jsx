@@ -178,44 +178,73 @@ const useSortableTable = (rows, defaultSortCol = 0, defaultDir = 'desc') => {
   return { sortedRows, sortCol, sortDir, handleSort }
 }
 
-const DataTable = ({ headers, rows, maxRows = 10 }) => {
+// ── ページネーション ──
+
+const Pagination = ({ currentPage, totalPages, onPageChange }) => {
+  if (totalPages <= 1) return null
+  return (
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 12, fontSize: 12 }}>
+      <button onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1} style={{
+        padding: '4px 10px', border: `1px solid ${C.cardBorder}`, borderRadius: 6,
+        background: currentPage === 1 ? C.card : C.bg, color: currentPage === 1 ? C.textMuted : C.text,
+        cursor: currentPage === 1 ? 'default' : 'pointer', fontWeight: 600,
+      }}>← 前</button>
+      <span style={{ color: C.textSub }}>{currentPage} / {totalPages}</span>
+      <button onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages} style={{
+        padding: '4px 10px', border: `1px solid ${C.cardBorder}`, borderRadius: 6,
+        background: currentPage === totalPages ? C.card : C.bg, color: currentPage === totalPages ? C.textMuted : C.text,
+        cursor: currentPage === totalPages ? 'default' : 'pointer', fontWeight: 600,
+      }}>次 →</button>
+    </div>
+  )
+}
+
+const DataTable = ({ headers, rows, perPage = 100 }) => {
+  const [page, setPage] = useState(1)
   const { sortedRows, sortCol, sortDir, handleSort } = useSortableTable(rows)
   const sortable = headers.map((_, i) => isSortableColumn(rows, i))
 
+  const totalPages = Math.max(1, Math.ceil(sortedRows.length / perPage))
+  const safePage = Math.min(page, totalPages)
+  const pageRows = sortedRows.slice((safePage - 1) * perPage, safePage * perPage)
+
   return (
-    <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-        <thead>
-          <tr>
-            {headers.map((h, i) => (
-              <th key={i} onClick={() => sortable[i] && handleSort(i)} style={{
-                textAlign: i === 0 || i === 1 ? 'left' : 'right',
-                padding: '8px 10px', color: sortCol === i ? C.accent : C.textMuted, fontWeight: 600,
-                borderBottom: `2px solid ${C.cardBorder}`, whiteSpace: 'nowrap',
-                cursor: sortable[i] ? 'pointer' : 'default',
-                userSelect: 'none',
-              }}>
-                {h}{sortCol === i && <SortIndicator direction={sortDir} />}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {sortedRows.slice(0, maxRows).map((row, i) => (
-            <tr key={i} style={{ borderBottom: `1px solid ${C.cardBorder}` }}>
-              {row.map((cell, j) => (
-                <td key={j} style={{
-                  textAlign: j === 0 || j === 1 ? 'left' : 'right',
-                  padding: '8px 10px', color: j <= 1 ? C.text : C.textSub,
-                  fontWeight: j <= 1 ? 600 : 400,
-                  maxWidth: j === 1 ? 200 : 'none',
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }}>{typeof cell === 'number' ? cell.toLocaleString() : cell}</td>
+    <div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <thead>
+            <tr>
+              {headers.map((h, i) => (
+                <th key={i} onClick={() => sortable[i] && handleSort(i)} style={{
+                  textAlign: i === 0 || i === 1 ? 'left' : 'right',
+                  padding: '8px 10px', color: sortCol === i ? C.accent : C.textMuted, fontWeight: 600,
+                  borderBottom: `2px solid ${C.cardBorder}`, whiteSpace: 'nowrap',
+                  cursor: sortable[i] ? 'pointer' : 'default',
+                  userSelect: 'none',
+                }}>
+                  {h}{sortCol === i && <SortIndicator direction={sortDir} />}
+                </th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {pageRows.map((row, i) => (
+              <tr key={i} style={{ borderBottom: `1px solid ${C.cardBorder}` }}>
+                {row.map((cell, j) => (
+                  <td key={j} style={{
+                    textAlign: j === 0 || j === 1 ? 'left' : 'right',
+                    padding: '8px 10px', color: j <= 1 ? C.text : C.textSub,
+                    fontWeight: j <= 1 ? 600 : 400,
+                    maxWidth: j === 1 ? 200 : 'none',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>{typeof cell === 'number' ? cell.toLocaleString() : cell}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <Pagination currentPage={safePage} totalPages={totalPages} onPageChange={setPage} />
     </div>
   )
 }
@@ -515,55 +544,63 @@ const EditableNumber = ({ value, onSave }) => {
 
 // ── タイトル付きデータテーブル ──
 
-const TitledDataTable = ({ headers, rows, titleMap, onSaveTitle, titleColIndex = 1, maxRows = 25 }) => {
+const TitledDataTable = ({ headers, rows, titleMap, onSaveTitle, titleColIndex = 1, perPage = 100 }) => {
+  const [page, setPage] = useState(1)
   const { sortedRows, sortCol, sortDir, handleSort } = useSortableTable(rows)
   const sortable = headers.map((_, i) => i !== titleColIndex && isSortableColumn(rows, i))
 
+  const totalPages = Math.max(1, Math.ceil(sortedRows.length / perPage))
+  const safePage = Math.min(page, totalPages)
+  const pageRows = sortedRows.slice((safePage - 1) * perPage, safePage * perPage)
+
   return (
-    <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-        <thead>
-          <tr>
-            {headers.map((h, i) => (
-              <th key={i} onClick={() => sortable[i] && handleSort(i)} style={{
-                textAlign: i === 0 || i === titleColIndex ? 'left' : 'right',
-                padding: '8px 10px', color: sortCol === i ? C.accent : C.textMuted, fontWeight: 600,
-                borderBottom: `2px solid ${C.cardBorder}`, whiteSpace: 'nowrap',
-                cursor: sortable[i] ? 'pointer' : 'default',
-                userSelect: 'none',
-              }}>
-                {h}{sortCol === i && <SortIndicator direction={sortDir} />}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {sortedRows.slice(0, maxRows).map((row, i) => (
-            <tr key={i} style={{ borderBottom: `1px solid ${C.cardBorder}` }}>
-              {row.map((cell, j) => (
-                <td key={j} style={{
-                  textAlign: j === 0 || j === titleColIndex ? 'left' : 'right',
-                  padding: '8px 10px', color: j <= titleColIndex ? C.text : C.textSub,
-                  fontWeight: j <= titleColIndex ? 600 : 400,
-                  maxWidth: j === titleColIndex ? 220 : 'none',
-                  overflow: j === titleColIndex ? 'visible' : 'hidden',
-                  textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+    <div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <thead>
+            <tr>
+              {headers.map((h, i) => (
+                <th key={i} onClick={() => sortable[i] && handleSort(i)} style={{
+                  textAlign: i === 0 || i === titleColIndex ? 'left' : 'right',
+                  padding: '8px 10px', color: sortCol === i ? C.accent : C.textMuted, fontWeight: 600,
+                  borderBottom: `2px solid ${C.cardBorder}`, whiteSpace: 'nowrap',
+                  cursor: sortable[i] ? 'pointer' : 'default',
+                  userSelect: 'none',
                 }}>
-                  {j === titleColIndex ? (
-                    <EditableTitle
-                      content={cell.content}
-                      title={titleMap[cell.content]}
-                      onSave={onSaveTitle}
-                    />
-                  ) : (
-                    typeof cell === 'number' ? cell.toLocaleString() : cell
-                  )}
-                </td>
+                  {h}{sortCol === i && <SortIndicator direction={sortDir} />}
+                </th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {pageRows.map((row, i) => (
+              <tr key={i} style={{ borderBottom: `1px solid ${C.cardBorder}` }}>
+                {row.map((cell, j) => (
+                  <td key={j} style={{
+                    textAlign: j === 0 || j === titleColIndex ? 'left' : 'right',
+                    padding: '8px 10px', color: j <= titleColIndex ? C.text : C.textSub,
+                    fontWeight: j <= titleColIndex ? 600 : 400,
+                    maxWidth: j === titleColIndex ? 220 : 'none',
+                    overflow: j === titleColIndex ? 'visible' : 'hidden',
+                    textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>
+                    {j === titleColIndex ? (
+                      <EditableTitle
+                        content={cell.content}
+                        title={titleMap[cell.content]}
+                        onSave={onSaveTitle}
+                      />
+                    ) : (
+                      typeof cell === 'number' ? cell.toLocaleString() : cell
+                    )}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <Pagination currentPage={safePage} totalPages={totalPages} onPageChange={setPage} />
     </div>
   )
 }
@@ -602,7 +639,6 @@ function FeedTab({ data, titleMap, onSaveTitle }) {
           ])}
           titleMap={titleMap}
           onSaveTitle={onSaveTitle}
-          maxRows={25}
         />
       </div>
     </div>
@@ -612,7 +648,8 @@ function FeedTab({ data, titleMap, onSaveTitle }) {
 
 // ── リール用データテーブル（フォロワー数編集対応） ──
 
-const ReelsDataTable = ({ data, titleMap, onSaveTitle, onSaveFollowers, maxRows = 25 }) => {
+const ReelsDataTable = ({ data, titleMap, onSaveTitle, onSaveFollowers, perPage = 100 }) => {
+  const [page, setPage] = useState(1)
   const headers = ['投稿日', 'タイトル', '閲覧数', 'リーチ', 'いいね', '保存', 'シェア', '平均視聴(秒)', 'フォロワー']
   const followersColIndex = 8
   const titleColIndex = 1
@@ -627,48 +664,55 @@ const ReelsDataTable = ({ data, titleMap, onSaveTitle, onSaveFollowers, maxRows 
   const { sortedRows, sortCol, sortDir, handleSort } = useSortableTable(rows)
   const sortable = headers.map((_, i) => i !== titleColIndex && i !== followersColIndex && isSortableColumn(rows, i))
 
+  const totalPages = Math.max(1, Math.ceil(sortedRows.length / perPage))
+  const safePage = Math.min(page, totalPages)
+  const pageRows = sortedRows.slice((safePage - 1) * perPage, safePage * perPage)
+
   return (
-    <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-        <thead>
-          <tr>
-            {headers.map((h, i) => (
-              <th key={i} onClick={() => sortable[i] && handleSort(i)} style={{
-                textAlign: i === 0 || i === titleColIndex ? 'left' : 'right',
-                padding: '8px 10px', color: sortCol === i ? C.accent : C.textMuted, fontWeight: 600,
-                borderBottom: `2px solid ${C.cardBorder}`, whiteSpace: 'nowrap',
-                cursor: sortable[i] ? 'pointer' : 'default', userSelect: 'none',
-              }}>
-                {h}{sortCol === i && <SortIndicator direction={sortDir} />}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {sortedRows.slice(0, maxRows).map((row, i) => (
-            <tr key={i} style={{ borderBottom: `1px solid ${C.cardBorder}` }}>
-              {row.map((cell, j) => (
-                <td key={j} style={{
-                  textAlign: j === 0 || j === titleColIndex ? 'left' : 'right',
-                  padding: '8px 10px', color: j <= titleColIndex ? C.text : C.textSub,
-                  fontWeight: j <= titleColIndex ? 600 : 400,
-                  maxWidth: j === titleColIndex ? 220 : 'none',
-                  overflow: j === titleColIndex ? 'visible' : 'hidden',
-                  textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+    <div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <thead>
+            <tr>
+              {headers.map((h, i) => (
+                <th key={i} onClick={() => sortable[i] && handleSort(i)} style={{
+                  textAlign: i === 0 || i === titleColIndex ? 'left' : 'right',
+                  padding: '8px 10px', color: sortCol === i ? C.accent : C.textMuted, fontWeight: 600,
+                  borderBottom: `2px solid ${C.cardBorder}`, whiteSpace: 'nowrap',
+                  cursor: sortable[i] ? 'pointer' : 'default', userSelect: 'none',
                 }}>
-                  {j === titleColIndex ? (
-                    <EditableTitle content={cell.content} title={titleMap[cell.content]} onSave={onSaveTitle} />
-                  ) : j === followersColIndex ? (
-                    <EditableNumber value={cell.value} onSave={(val) => onSaveFollowers(cell.mediaId, val)} />
-                  ) : (
-                    typeof cell === 'number' ? cell.toLocaleString() : cell
-                  )}
-                </td>
+                  {h}{sortCol === i && <SortIndicator direction={sortDir} />}
+                </th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {pageRows.map((row, i) => (
+              <tr key={i} style={{ borderBottom: `1px solid ${C.cardBorder}` }}>
+                {row.map((cell, j) => (
+                  <td key={j} style={{
+                    textAlign: j === 0 || j === titleColIndex ? 'left' : 'right',
+                    padding: '8px 10px', color: j <= titleColIndex ? C.text : C.textSub,
+                    fontWeight: j <= titleColIndex ? 600 : 400,
+                    maxWidth: j === titleColIndex ? 220 : 'none',
+                    overflow: j === titleColIndex ? 'visible' : 'hidden',
+                    textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>
+                    {j === titleColIndex ? (
+                      <EditableTitle content={cell.content} title={titleMap[cell.content]} onSave={onSaveTitle} />
+                    ) : j === followersColIndex ? (
+                      <EditableNumber value={cell.value} onSave={(val) => onSaveFollowers(cell.mediaId, val)} />
+                    ) : (
+                      typeof cell === 'number' ? cell.toLocaleString() : cell
+                    )}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <Pagination currentPage={safePage} totalPages={totalPages} onPageChange={setPage} />
     </div>
   )
 }
