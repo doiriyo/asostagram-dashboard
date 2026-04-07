@@ -203,6 +203,56 @@ function safeGetInsights(mediaId, metrics) {
 
 // ── ヘルパー ─────────────────────────────
 
+/**
+ * ページネーションで全メディアを取得（期間指定対応）
+ * @param {string} igUserId - InstagramユーザーID
+ * @param {Date} sinceDate - 取得開始日（これ以降の投稿を取得）
+ * @param {Date} untilDate - 取得終了日（これ以前の投稿を取得）
+ * @returns {Array} メディアオブジェクトの配列
+ */
+function fetchAllMediaInRange(igUserId, sinceDate, untilDate) {
+  const allMedia = [];
+  let afterCursor = null;
+  let page = 0;
+
+  while (true) {
+    page++;
+    const params = {
+      fields: 'id,caption,timestamp,media_type,media_product_type,like_count,comments_count',
+      limit: '50',
+    };
+    if (afterCursor) params.after = afterCursor;
+
+    const response = callApi(`${igUserId}/media`, params);
+    if (!response.data || response.data.length === 0) break;
+
+    let reachedBeforeRange = false;
+    for (const media of response.data) {
+      const postDate = new Date(media.timestamp);
+      // 期間より後の投稿はスキップ
+      if (postDate > untilDate) continue;
+      // 期間より前の投稿に到達したら終了
+      if (postDate < sinceDate) {
+        reachedBeforeRange = true;
+        break;
+      }
+      allMedia.push(media);
+    }
+
+    if (reachedBeforeRange) break;
+
+    // 次ページがなければ終了
+    if (!response.paging || !response.paging.cursors || !response.paging.cursors.after) break;
+    afterCursor = response.paging.cursors.after;
+
+    writeLog('INFO', `メディア取得中: ${page}ページ目完了（累計${allMedia.length}件）`);
+    Utilities.sleep(1000);
+  }
+
+  writeLog('INFO', `メディア取得完了: 全${allMedia.length}件（${Utilities.formatDate(sinceDate, 'Asia/Tokyo', 'yyyy/M/d')}〜${Utilities.formatDate(untilDate, 'Asia/Tokyo', 'yyyy/M/d')}）`);
+  return allMedia;
+}
+
 function getExistingMediaIds(sheet, mediaIdColIndex) {
   const ids = new Set();
   if (sheet.getLastRow() < 2) return ids;
@@ -245,14 +295,14 @@ function collectFeedInsights() {
 
   const existingIds = getExistingMediaIds(sheet, 13); // メディアID = N列(index 13)
 
-  const mediaResponse = callApi(`${igUserId}/media`, {
-    fields: 'id,caption,timestamp,media_type,media_product_type,like_count,comments_count',
-    limit: '25',
-  });
+  // 2025年度（2025/4/1〜2026/3/31）の全投稿を取得
+  const sinceDate = new Date('2025-04-01T00:00:00+09:00');
+  const untilDate = new Date('2026-03-31T23:59:59+09:00');
+  const allMedia = fetchAllMediaInRange(igUserId, sinceDate, untilDate);
 
   let newCount = 0, updateCount = 0;
 
-  for (const media of mediaResponse.data) {
+  for (const media of allMedia) {
     if (media.media_product_type === 'REELS' || media.media_product_type === 'STORY') continue;
 
     const mediaType = media.media_type === 'CAROUSEL_ALBUM' ? 'カルーセル' : '静止画';
@@ -324,14 +374,14 @@ function collectReelsInsights() {
 
   const existingIds = getExistingMediaIds(sheet, 11); // メディアID = L列(index 11)
 
-  const mediaResponse = callApi(`${igUserId}/media`, {
-    fields: 'id,caption,timestamp,media_type,media_product_type,like_count,comments_count',
-    limit: '25',
-  });
+  // 2025年度（2025/4/1〜2026/3/31）の全投稿を取得
+  const sinceDate = new Date('2025-04-01T00:00:00+09:00');
+  const untilDate = new Date('2026-03-31T23:59:59+09:00');
+  const allMedia = fetchAllMediaInRange(igUserId, sinceDate, untilDate);
 
   let newCount = 0, updateCount = 0;
 
-  for (const media of mediaResponse.data) {
+  for (const media of allMedia) {
     if (media.media_product_type !== 'REELS') continue;
 
     // 確実に取れるメトリクスを一括取得
