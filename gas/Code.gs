@@ -289,7 +289,10 @@ const THUMBNAIL_FOLDER_ID = '1Q-vhbp1PJSuieR-L2qlEQCWV_UO1n8Ek';
  */
 function authorizeDrive() {
   const folder = DriveApp.getFolderById(THUMBNAIL_FOLDER_ID);
-  SpreadsheetApp.getUi().alert('Drive権限OK', `フォルダ「${folder.getName()}」にアクセスできました。`, SpreadsheetApp.getUi().ButtonSet.OK);
+  // 書き込み権限もトリガーするためテストファイルを作成→即削除
+  const testFile = folder.createFile('_auth_test.txt', 'test');
+  testFile.setTrashed(true);
+  SpreadsheetApp.getUi().alert('Drive権限OK', `フォルダ「${folder.getName()}」への読み書きアクセスを確認しました。`, SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 /**
