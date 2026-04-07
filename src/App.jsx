@@ -216,14 +216,15 @@ const CsvExportPanel = ({ headers, rows, filename, titleMap = {} }) => {
   const [to, setTo] = useState('2026-03-31')
 
   const handleExport = () => {
-    const fromDate = new Date(from + 'T00:00:00')
-    const toDate = new Date(to + 'T23:59:59')
+    // YYYYMMDD の数値で比較（タイムゾーンの影響を受けない）
+    const fromNum = Number(from.replace(/-/g, ''))
+    const toNum = Number(to.replace(/-/g, ''))
     const filtered = rows.filter(row => {
       const dateStr = String(row[0])
       const m = dateStr.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/)
       if (!m) return true
-      const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
-      return d >= fromDate && d <= toDate
+      const dateNum = Number(m[1]) * 10000 + Number(m[2]) * 100 + Number(m[3])
+      return dateNum >= fromNum && dateNum <= toNum
     })
     downloadCsv(headers, filtered, filename, titleMap)
   }
