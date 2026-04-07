@@ -55,7 +55,7 @@ const HEADERS = {
     'インタラクション合計',
     '平均視聴時間(秒)', '総再生時間(秒)',
     'メディアID', '最終更新',
-    'サムネイルDriveID',
+    'サムネイルDriveID', '獲得フォロワー数',
   ],
   STORIES: [
     '投稿日', '内容',
@@ -1032,6 +1032,8 @@ function doGet(e) {
     // タイトル保存（GETベース: CORSプリフライト回避のため）
     if (e.parameter.action === 'setTitle' && e.parameter.key) {
       result = saveTitleData(ss, e.parameter.key, e.parameter.title || '');
+    } else if (e.parameter.action === 'setReelFollowers' && e.parameter.mediaId) {
+      result = saveReelFollowers(ss, e.parameter.mediaId, e.parameter.value || '0');
     } else {
       switch (type) {
         case 'all': result = getAllData(ss, from); break;
@@ -1128,6 +1130,30 @@ function saveTitleData(ss, key, title) {
   }
   sheet.appendRow([key, title]);
   return { success: true, created: true };
+}
+
+function saveReelFollowers(ss, mediaId, value) {
+  const sheet = ss.getSheetByName(SHEET_NAMES.REELS);
+  if (!sheet || sheet.getLastRow() < 2) return { error: 'リールシートが見つかりません' };
+
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const mediaIdCol = headers.indexOf('メディアID');
+  let followersCol = headers.indexOf('獲得フォロワー数');
+
+  // 列がなければ追加
+  if (followersCol === -1) {
+    followersCol = headers.length;
+    sheet.getRange(1, followersCol + 1).setValue('獲得フォロワー数');
+  }
+
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][mediaIdCol]) === String(mediaId)) {
+      sheet.getRange(i + 1, followersCol + 1).setValue(Number(value) || 0);
+      return { success: true };
+    }
+  }
+  return { error: 'メディアIDが見つかりません' };
 }
 
 function getTitlesData(ss) {

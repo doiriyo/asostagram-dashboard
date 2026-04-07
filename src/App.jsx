@@ -464,6 +464,55 @@ const EditableTitle = ({ content, title, onSave }) => {
   )
 }
 
+// ── 編集可能な数値セル ──
+
+const EditableNumber = ({ value, onSave }) => {
+  const [editing, setEditing] = useState(false)
+  const [input, setInput] = useState(value ?? '')
+
+  const handleSave = () => {
+    onSave(Number(input) || 0)
+    setEditing(false)
+  }
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') handleSave()
+    if (e.key === 'Escape') { setInput(value ?? ''); setEditing(false) }
+  }
+
+  if (editing) {
+    return (
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center', justifyContent: 'flex-end' }}>
+        <input
+          type="number" value={input} onChange={e => setInput(e.target.value)}
+          onKeyDown={handleKeyDown} autoFocus
+          style={{
+            width: 60, padding: '3px 6px', border: `1px solid ${C.accent}`, borderRadius: 4,
+            fontSize: 12, fontFamily: 'inherit', outline: 'none', textAlign: 'right',
+          }}
+        />
+        <button onClick={handleSave} style={{
+          padding: '2px 8px', border: 'none', borderRadius: 4, background: C.accent,
+          color: '#fff', fontSize: 10, cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap',
+        }}>保存</button>
+        <button onClick={() => { setInput(value ?? ''); setEditing(false) }} style={{
+          padding: '2px 8px', border: `1px solid ${C.cardBorder}`, borderRadius: 4,
+          background: 'transparent', color: C.textMuted, fontSize: 10, cursor: 'pointer', whiteSpace: 'nowrap',
+        }}>✕</button>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end', cursor: 'pointer' }} onClick={() => setEditing(true)}>
+      <span style={{ color: (value != null && value !== 0 && value !== '') ? C.text : C.textMuted }}>
+        {(value != null && value !== '' && value !== 0) ? Number(value).toLocaleString() : '—'}
+      </span>
+      <span style={{ fontSize: 10, color: C.textMuted, flexShrink: 0 }}>✏️</span>
+    </div>
+  )
+}
+
 // ── タイトル付きデータテーブル ──
 
 const TitledDataTable = ({ headers, rows, titleMap, onSaveTitle, titleColIndex = 1, maxRows = 25 }) => {
@@ -561,9 +610,73 @@ function FeedTab({ data, titleMap, onSaveTitle }) {
 }
 
 
+// ── リール用データテーブル（フォロワー数編集対応） ──
+
+const ReelsDataTable = ({ data, titleMap, onSaveTitle, onSaveFollowers, maxRows = 25 }) => {
+  const headers = ['投稿日', 'タイトル', '閲覧数', 'リーチ', 'いいね', '保存', 'シェア', '平均視聴(秒)', 'フォロワー']
+  const followersColIndex = 8
+  const titleColIndex = 1
+
+  const rows = data.map(d => [
+    formatDateLong(d['投稿日']), { content: d['内容'] },
+    d['閲覧数'] || 0, d['リーチ'] || 0, d['いいね'] || 0,
+    d['保存数'] || 0, d['シェア'] || 0, +((d['平均視聴時間(秒)'] || 0) / 1000).toFixed(2),
+    { mediaId: d['メディアID'], value: d['獲得フォロワー数'] },
+  ])
+
+  const { sortedRows, sortCol, sortDir, handleSort } = useSortableTable(rows)
+  const sortable = headers.map((_, i) => i !== titleColIndex && i !== followersColIndex && isSortableColumn(rows, i))
+
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+        <thead>
+          <tr>
+            {headers.map((h, i) => (
+              <th key={i} onClick={() => sortable[i] && handleSort(i)} style={{
+                textAlign: i === 0 || i === titleColIndex ? 'left' : 'right',
+                padding: '8px 10px', color: sortCol === i ? C.accent : C.textMuted, fontWeight: 600,
+                borderBottom: `2px solid ${C.cardBorder}`, whiteSpace: 'nowrap',
+                cursor: sortable[i] ? 'pointer' : 'default', userSelect: 'none',
+              }}>
+                {h}{sortCol === i && <SortIndicator direction={sortDir} />}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {sortedRows.slice(0, maxRows).map((row, i) => (
+            <tr key={i} style={{ borderBottom: `1px solid ${C.cardBorder}` }}>
+              {row.map((cell, j) => (
+                <td key={j} style={{
+                  textAlign: j === 0 || j === titleColIndex ? 'left' : 'right',
+                  padding: '8px 10px', color: j <= titleColIndex ? C.text : C.textSub,
+                  fontWeight: j <= titleColIndex ? 600 : 400,
+                  maxWidth: j === titleColIndex ? 220 : 'none',
+                  overflow: j === titleColIndex ? 'visible' : 'hidden',
+                  textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                  {j === titleColIndex ? (
+                    <EditableTitle content={cell.content} title={titleMap[cell.content]} onSave={onSaveTitle} />
+                  ) : j === followersColIndex ? (
+                    <EditableNumber value={cell.value} onSave={(val) => onSaveFollowers(cell.mediaId, val)} />
+                  ) : (
+                    typeof cell === 'number' ? cell.toLocaleString() : cell
+                  )}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+
 // ── リールタブ ──
 
-function ReelsTab({ data, titleMap, onSaveTitle }) {
+function ReelsTab({ data, titleMap, onSaveTitle, onSaveFollowers }) {
   if (!data || data.length === 0) return <ErrorMsg message="リールのデータがまだありません" />
 
   const totalViews = data.reduce((s, d) => s + (d['閲覧数'] || 0), 0)
@@ -613,16 +726,11 @@ function ReelsTab({ data, titleMap, onSaveTitle }) {
 
       <SectionTitle>リール一覧</SectionTitle>
       <div style={{ background: C.card, borderRadius: 12, border: `1px solid ${C.cardBorder}`, padding: 16 }}>
-        <TitledDataTable
-          headers={['投稿日', 'タイトル', '閲覧数', 'リーチ', 'いいね', '保存', 'シェア', '平均視聴(秒)']}
-          rows={data.map(d => [
-            formatDateLong(d['投稿日']), { content: d['内容'] },
-            d['閲覧数'] || 0, d['リーチ'] || 0, d['いいね'] || 0,
-            d['保存数'] || 0, d['シェア'] || 0, +((d['平均視聴時間(秒)'] || 0) / 1000).toFixed(2),
-          ])}
+        <ReelsDataTable
+          data={data}
           titleMap={titleMap}
           onSaveTitle={onSaveTitle}
-          maxRows={25}
+          onSaveFollowers={onSaveFollowers}
         />
       </div>
     </div>
@@ -698,6 +806,20 @@ export default function App() {
     } catch { /* 保存失敗時もローカル状態は維持 */ }
   }, [])
 
+  const handleSaveFollowers = useCallback(async (mediaId, value) => {
+    // ローカル状態を即時更新
+    setData(prev => ({
+      ...prev,
+      reels: prev.reels.map(r =>
+        String(r['メディアID']) === String(mediaId) ? { ...r, '獲得フォロワー数': value } : r
+      ),
+    }))
+    try {
+      const params = new URLSearchParams({ action: 'setReelFollowers', mediaId, value: String(value) })
+      await fetch(`${API_URL}?${params}`)
+    } catch { /* 保存失敗時もローカル状態は維持 */ }
+  }, [])
+
   useEffect(() => { fetchData() }, [fetchData])
 
   const tabs = [
@@ -755,7 +877,7 @@ export default function App() {
         <>
           {tab === 'account' && <AccountTab data={data.account} />}
           {tab === 'feed' && <FeedTab data={data.feed} titleMap={titleMap} onSaveTitle={handleSaveTitle} />}
-          {tab === 'reels' && <ReelsTab data={data.reels} titleMap={titleMap} onSaveTitle={handleSaveTitle} />}
+          {tab === 'reels' && <ReelsTab data={data.reels} titleMap={titleMap} onSaveTitle={handleSaveTitle} onSaveFollowers={handleSaveFollowers} />}
           {tab === 'stories' && <StoriesTab data={data.stories} />}
         </>
       )}
