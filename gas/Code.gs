@@ -284,6 +284,15 @@ function updateRow(sheet, mediaId, mediaIdColIndex, updates) {
 const THUMBNAIL_FOLDER_ID = '1Q-vhbp1PJSuieR-L2qlEQCWV_UO1n8Ek';
 
 /**
+ * Drive権限の承認用（GASエディタで一度実行してください）
+ * 実行すると権限承認ダイアログが表示されます。
+ */
+function authorizeDrive() {
+  const folder = DriveApp.getFolderById(THUMBNAIL_FOLDER_ID);
+  SpreadsheetApp.getUi().alert('Drive権限OK', `フォルダ「${folder.getName()}」にアクセスできました。`, SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+/**
  * サムネイル画像をGoogle Driveに保存し、fileIdを返す
  * @param {string} mediaId - InstagramメディアID
  * @param {string} thumbnailUrl - サムネイルURL
