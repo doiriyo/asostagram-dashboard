@@ -55,6 +55,7 @@ const HEADERS = {
     'インタラクション合計',
     '平均視聴時間(秒)', '総再生時間(秒)',
     'メディアID', '最終更新',
+    'サムネイルDriveID',
   ],
   STORIES: [
     '投稿日', '内容',
@@ -218,7 +219,7 @@ function fetchAllMediaInRange(igUserId, sinceDate, untilDate) {
   while (true) {
     page++;
     const params = {
-      fields: 'id,caption,timestamp,media_type,media_product_type,like_count,comments_count',
+      fields: 'id,caption,timestamp,media_type,media_product_type,like_count,comments_count,thumbnail_url',
       limit: '50',
     };
     if (afterCursor) params.after = afterCursor;
@@ -275,6 +276,102 @@ function updateRow(sheet, mediaId, mediaIdColIndex, updates) {
     }
   }
   return false;
+}
+
+
+// ── サムネイル保存 ───────────────────────
+
+const THUMBNAIL_FOLDER_ID = '1Q-vhbp1PJSuieR-L2qlEQCWV_UO1n8Ek';
+
+/**
+ * サムネイル画像をGoogle Driveに保存し、fileIdを返す
+ * @param {string} mediaId - InstagramメディアID
+ * @param {string} thumbnailUrl - サムネイルURL
+ * @returns {string|null} DriveのfileId（失敗時はnull）
+ */
+function saveThumbnail(mediaId, thumbnailUrl) {
+  try {
+    const blob = UrlFetchApp.fetch(thumbnailUrl, { muteHttpExceptions: true }).getBlob();
+    blob.setName(mediaId + '.jpg');
+    const folder = DriveApp.getFolderById(THUMBNAIL_FOLDER_ID);
+    const file = folder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    return file.getId();
+  } catch (e) {
+    writeLog('WARN', `サムネイル保存失敗 (${mediaId}): ${e.message}`);
+    return null;
+  }
+}
+
+/**
+ * 既存リールのサムネイルを遡及取得（6分制限対策: 5分で安全停止）
+ * 未保存のものだけ処理する。全件完了するまで複数回実行する想定。
+ */
+function backfillReelThumbnails() {
+  const startTime = new Date().getTime();
+  const TIME_LIMIT_MS = 5 * 60 * 1000; // 5分で安全停止
+
+  const igUserId = getSetting('IG_USER_ID');
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SHEET_NAMES.REELS);
+
+  if (!sheet || sheet.getLastRow() < 2) {
+    writeLog('INFO', 'サムネイルバックフィル: リールデータなし');
+    return;
+  }
+
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const mediaIdCol = headers.indexOf('メディアID');    // 0-based
+  const thumbCol = headers.indexOf('サムネイルDriveID'); // 0-based
+
+  // ヘッダーにサムネイル列がまだなければ追加
+  if (thumbCol === -1) {
+    sheet.getRange(1, headers.length + 1).setValue('サムネイルDriveID');
+    writeLog('INFO', 'サムネイルバックフィル: ヘッダー列を追加しました');
+    // 再取得
+    return backfillReelThumbnails();
+  }
+
+  let processed = 0, saved = 0, skipped = 0;
+
+  for (let i = 1; i < data.length; i++) {
+    // 経過時間チェック
+    if (new Date().getTime() - startTime > TIME_LIMIT_MS) {
+      writeLog('INFO', `サムネイルバックフィル: 5分制限に到達。処理${processed}件（保存${saved}件）。残りは次回実行で処理します`);
+      return;
+    }
+
+    const mediaId = String(data[i][mediaIdCol] || '');
+    const existingThumbId = data[i][thumbCol];
+
+    // 既に保存済みならスキップ
+    if (existingThumbId) {
+      skipped++;
+      continue;
+    }
+
+    if (!mediaId) continue;
+
+    // Instagram APIからthumbnail_urlを取得
+    try {
+      const mediaInfo = callApi(mediaId, { fields: 'thumbnail_url' });
+      if (mediaInfo.thumbnail_url) {
+        const fileId = saveThumbnail(mediaId, mediaInfo.thumbnail_url);
+        if (fileId) {
+          sheet.getRange(i + 1, thumbCol + 1).setValue(fileId);
+          saved++;
+        }
+      }
+    } catch (e) {
+      writeLog('WARN', `サムネイル取得失敗 (${mediaId}): ${e.message}`);
+    }
+
+    processed++;
+    Utilities.sleep(1500); // レート制限対策
+  }
+
+  writeLog('INFO', `サムネイルバックフィル完了: 処理${processed}件, 保存${saved}件, スキップ${skipped}件（保存済み）`);
 }
 
 
@@ -414,6 +511,12 @@ function collectReelsInsights() {
         updateCount++;
       }
     } else {
+      // 新規投稿: サムネイルも保存
+      let thumbDriveId = '';
+      if (media.thumbnail_url) {
+        thumbDriveId = saveThumbnail(media.id, media.thumbnail_url) || '';
+      }
+
       sheet.appendRow([
         postDate, caption,
         views, base.reach || 0, media.like_count || 0, media.comments_count || 0,
@@ -421,6 +524,7 @@ function collectReelsInsights() {
         totalInteractions,
         avgWatchTime, totalWatchTime,
         media.id, new Date(),
+        thumbDriveId,
       ]);
       newCount++;
     }
@@ -662,6 +766,7 @@ function collectDailyAll() {
   try { collectFeedInsights(); } catch (e) { writeLog('ERROR', `通常投稿: ${e.message}`); }
   try { collectReelsInsights(); } catch (e) { writeLog('ERROR', `リール: ${e.message}`); }
   try { collectStoriesInsights(); } catch (e) { writeLog('ERROR', `ストーリーズ: ${e.message}`); }
+  try { backfillReelThumbnails(); } catch (e) { writeLog('ERROR', `サムネイルバックフィル: ${e.message}`); }
 
   writeLog('INFO', '=== 日次一括収集 完了 ===');
 }
@@ -1055,6 +1160,8 @@ function onOpen() {
     .addItem('リールのみ取得', 'collectReelsInsights')
     .addItem('ストーリーズのみ取得', 'collectStoriesInsights')
     .addItem('アカウント全体のみ取得', 'collectAccountInsights')
+    .addSeparator()
+    .addItem('リールサムネイル一括取得', 'backfillReelThumbnails')
     .addSeparator()
     .addItem('アクセストークンを更新', 'refreshAccessToken')
     .addToUi();
