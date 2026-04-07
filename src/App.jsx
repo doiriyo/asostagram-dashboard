@@ -178,6 +178,40 @@ const useSortableTable = (rows, defaultSortCol = 0, defaultDir = 'desc') => {
   return { sortedRows, sortCol, sortDir, handleSort }
 }
 
+// ── CSV出力 ──
+
+const downloadCsv = (headers, rows, filename) => {
+  const escapeCell = (val) => {
+    const str = val == null ? '' : String(val)
+    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+      return `"${str.replace(/"/g, '""')}"`
+    }
+    return str
+  }
+  const csvRows = [
+    headers.map(escapeCell).join(','),
+    ...rows.map(row => row.map(cell => {
+      const val = (cell && typeof cell === 'object') ? (cell.content || cell.value || '') : cell
+      return escapeCell(val)
+    }).join(',')),
+  ]
+  const bom = '\uFEFF'
+  const blob = new Blob([bom + csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${filename}_${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+const CsvButton = ({ onClick }) => (
+  <button onClick={onClick} style={{
+    padding: '5px 14px', border: `1px solid ${C.cardBorder}`, borderRadius: 6,
+    background: C.bg, fontSize: 11, cursor: 'pointer', color: C.textSub, fontWeight: 600,
+  }}>CSV出力</button>
+)
+
 // ── ページネーション ──
 
 const Pagination = ({ currentPage, totalPages, onPageChange }) => {
@@ -452,7 +486,6 @@ const EditableTitle = ({ content, title, onSave }) => {
   }
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter') handleSave()
     if (e.key === 'Escape') { setValue(title || ''); setEditing(false) }
   }
 
@@ -628,19 +661,30 @@ function FeedTab({ data, titleMap, onSaveTitle }) {
         <KpiCard label="フォロー獲得" value={totalFollows.toLocaleString()} />
       </div>
 
-      <SectionTitle>投稿一覧</SectionTitle>
-      <div style={{ background: C.card, borderRadius: 12, border: `1px solid ${C.cardBorder}`, padding: 16 }}>
-        <TitledDataTable
-          headers={['投稿日', 'タイトル', 'タイプ', '閲覧数', 'リーチ', 'いいね', '保存', 'シェア', 'フォロー']}
-          rows={data.map(d => [
-            formatDateLong(d['投稿日']), { content: d['内容'] }, d['メディアタイプ'],
-            d['閲覧数'] || 0, d['リーチ'] || 0, d['いいね'] || 0,
-            d['保存数'] || 0, d['シェア'] || 0, d['フォロー数'] || 0,
-          ])}
-          titleMap={titleMap}
-          onSaveTitle={onSaveTitle}
-        />
-      </div>
+      {(() => {
+        const feedHeaders = ['投稿日', 'タイトル', 'タイプ', '閲覧数', 'リーチ', 'いいね', '保存', 'シェア', 'フォロー']
+        const feedRows = data.map(d => [
+          formatDateLong(d['投稿日']), { content: d['内容'] }, d['メディアタイプ'],
+          d['閲覧数'] || 0, d['リーチ'] || 0, d['いいね'] || 0,
+          d['保存数'] || 0, d['シェア'] || 0, d['フォロー数'] || 0,
+        ])
+        return (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <SectionTitle>投稿一覧</SectionTitle>
+              <CsvButton onClick={() => downloadCsv(feedHeaders, feedRows, '通常投稿')} />
+            </div>
+            <div style={{ background: C.card, borderRadius: 12, border: `1px solid ${C.cardBorder}`, padding: 16 }}>
+              <TitledDataTable
+                headers={feedHeaders}
+                rows={feedRows}
+                titleMap={titleMap}
+                onSaveTitle={onSaveTitle}
+              />
+            </div>
+          </>
+        )
+      })()}
     </div>
   )
 }
@@ -768,15 +812,31 @@ function ReelsTab({ data, titleMap, onSaveTitle, onSaveFollowers }) {
         </ResponsiveContainer>
       </div>
 
-      <SectionTitle>リール一覧</SectionTitle>
-      <div style={{ background: C.card, borderRadius: 12, border: `1px solid ${C.cardBorder}`, padding: 16 }}>
-        <ReelsDataTable
-          data={data}
-          titleMap={titleMap}
-          onSaveTitle={onSaveTitle}
-          onSaveFollowers={onSaveFollowers}
-        />
-      </div>
+      {(() => {
+        const reelsHeaders = ['投稿日', 'タイトル', '閲覧数', 'リーチ', 'いいね', '保存', 'シェア', '平均視聴(秒)', 'フォロワー']
+        const reelsRows = data.map(d => [
+          formatDateLong(d['投稿日']), { content: d['内容'] },
+          d['閲覧数'] || 0, d['リーチ'] || 0, d['いいね'] || 0,
+          d['保存数'] || 0, d['シェア'] || 0, +((d['平均視聴時間(秒)'] || 0) / 1000).toFixed(2),
+          { mediaId: d['メディアID'], value: d['獲得フォロワー数'] },
+        ])
+        return (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <SectionTitle>リール一覧</SectionTitle>
+              <CsvButton onClick={() => downloadCsv(reelsHeaders, reelsRows, 'リール')} />
+            </div>
+            <div style={{ background: C.card, borderRadius: 12, border: `1px solid ${C.cardBorder}`, padding: 16 }}>
+              <ReelsDataTable
+                data={data}
+                titleMap={titleMap}
+                onSaveTitle={onSaveTitle}
+                onSaveFollowers={onSaveFollowers}
+              />
+            </div>
+          </>
+        )
+      })()}
     </div>
   )
 }
@@ -795,17 +855,25 @@ function StoriesTab({ data }) {
         <KpiCard label="リーチ合計" value={data.reduce((s, d) => s + (d['リーチ'] || 0), 0).toLocaleString()} />
       </div>
 
-      <SectionTitle>ストーリーズ一覧</SectionTitle>
-      <div style={{ background: C.card, borderRadius: 12, border: `1px solid ${C.cardBorder}`, padding: 16 }}>
-        <DataTable
-          headers={['投稿日', '内容', '閲覧数', 'リーチ', 'シェア', 'フォロー', 'ナビゲーション']}
-          rows={data.map(d => [
-            formatDateLong(d['投稿日']), d['内容'],
-            d['閲覧数'] || 0, d['リーチ'] || 0, d['シェア'] || 0,
-            d['フォロー数'] || 0, d['ナビゲーション'] || 0,
-          ])}
-        />
-      </div>
+      {(() => {
+        const stHeaders = ['投稿日', '内容', '閲覧数', 'リーチ', 'シェア', 'フォロー', 'ナビゲーション']
+        const stRows = data.map(d => [
+          formatDateLong(d['投稿日']), d['内容'],
+          d['閲覧数'] || 0, d['リーチ'] || 0, d['シェア'] || 0,
+          d['フォロー数'] || 0, d['ナビゲーション'] || 0,
+        ])
+        return (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <SectionTitle>ストーリーズ一覧</SectionTitle>
+              <CsvButton onClick={() => downloadCsv(stHeaders, stRows, 'ストーリーズ')} />
+            </div>
+            <div style={{ background: C.card, borderRadius: 12, border: `1px solid ${C.cardBorder}`, padding: 16 }}>
+              <DataTable headers={stHeaders} rows={stRows} />
+            </div>
+          </>
+        )
+      })()}
     </div>
   )
 }
