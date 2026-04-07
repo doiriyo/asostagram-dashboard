@@ -180,19 +180,25 @@ const useSortableTable = (rows, defaultSortCol = 0, defaultDir = 'desc') => {
 
 // ── CSV出力 ──
 
-const downloadCsv = (headers, rows, filename) => {
-  const escapeCell = (val) => {
-    const str = val == null ? '' : String(val)
-    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-      return `"${str.replace(/"/g, '""')}"`
-    }
-    return str
+const escapeCell = (val) => {
+  const str = val == null ? '' : String(val)
+  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+    return `"${str.replace(/"/g, '""')}"`
   }
+  return str
+}
+
+const downloadCsv = (headers, rows, filename, titleMap = {}) => {
   const csvRows = [
     headers.map(escapeCell).join(','),
     ...rows.map(row => row.map(cell => {
-      const val = (cell && typeof cell === 'object') ? (cell.content || cell.value || '') : cell
-      return escapeCell(val)
+      if (cell && typeof cell === 'object' && 'content' in cell) {
+        return escapeCell(titleMap[cell.content] || cell.content || '')
+      }
+      if (cell && typeof cell === 'object' && 'value' in cell) {
+        return escapeCell(cell.value ?? '')
+      }
+      return escapeCell(cell)
     }).join(',')),
   ]
   const bom = '\uFEFF'
@@ -205,12 +211,40 @@ const downloadCsv = (headers, rows, filename) => {
   URL.revokeObjectURL(url)
 }
 
-const CsvButton = ({ onClick }) => (
-  <button onClick={onClick} style={{
-    padding: '5px 14px', border: `1px solid ${C.cardBorder}`, borderRadius: 6,
-    background: C.bg, fontSize: 11, cursor: 'pointer', color: C.textSub, fontWeight: 600,
-  }}>CSV出力</button>
-)
+const CsvExportPanel = ({ headers, rows, filename, titleMap = {} }) => {
+  const [from, setFrom] = useState('2025-04-01')
+  const [to, setTo] = useState('2026-03-31')
+
+  const handleExport = () => {
+    const fromDate = new Date(from + 'T00:00:00')
+    const toDate = new Date(to + 'T23:59:59')
+    const filtered = rows.filter(row => {
+      const dateStr = String(row[0])
+      const m = dateStr.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/)
+      if (!m) return true
+      const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+      return d >= fromDate && d <= toDate
+    })
+    downloadCsv(headers, filtered, filename, titleMap)
+  }
+
+  const inputStyle = {
+    padding: '4px 8px', border: `1px solid ${C.cardBorder}`, borderRadius: 6,
+    fontSize: 11, fontFamily: 'inherit', outline: 'none', color: C.text,
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      <input type="date" value={from} onChange={e => setFrom(e.target.value)} style={inputStyle} />
+      <span style={{ fontSize: 11, color: C.textMuted }}>〜</span>
+      <input type="date" value={to} onChange={e => setTo(e.target.value)} style={inputStyle} />
+      <button onClick={handleExport} style={{
+        padding: '5px 14px', border: `1px solid ${C.cardBorder}`, borderRadius: 6,
+        background: C.bg, fontSize: 11, cursor: 'pointer', color: C.textSub, fontWeight: 600,
+      }}>CSV出力</button>
+    </div>
+  )
+}
 
 // ── ページネーション ──
 
@@ -672,7 +706,7 @@ function FeedTab({ data, titleMap, onSaveTitle }) {
           <>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <SectionTitle>投稿一覧</SectionTitle>
-              <CsvButton onClick={() => downloadCsv(feedHeaders, feedRows, '通常投稿')} />
+              <CsvExportPanel headers={feedHeaders} rows={feedRows} filename="通常投稿" titleMap={titleMap} />
             </div>
             <div style={{ background: C.card, borderRadius: 12, border: `1px solid ${C.cardBorder}`, padding: 16 }}>
               <TitledDataTable
@@ -824,7 +858,7 @@ function ReelsTab({ data, titleMap, onSaveTitle, onSaveFollowers }) {
           <>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <SectionTitle>リール一覧</SectionTitle>
-              <CsvButton onClick={() => downloadCsv(reelsHeaders, reelsRows, 'リール')} />
+              <CsvExportPanel headers={reelsHeaders} rows={reelsRows} filename="リール" titleMap={titleMap} />
             </div>
             <div style={{ background: C.card, borderRadius: 12, border: `1px solid ${C.cardBorder}`, padding: 16 }}>
               <ReelsDataTable
@@ -866,7 +900,7 @@ function StoriesTab({ data }) {
           <>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <SectionTitle>ストーリーズ一覧</SectionTitle>
-              <CsvButton onClick={() => downloadCsv(stHeaders, stRows, 'ストーリーズ')} />
+              <CsvExportPanel headers={stHeaders} rows={stRows} filename="ストーリーズ" />
             </div>
             <div style={{ background: C.card, borderRadius: 12, border: `1px solid ${C.cardBorder}`, padding: 16 }}>
               <DataTable headers={stHeaders} rows={stRows} />
